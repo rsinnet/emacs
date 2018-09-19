@@ -49,9 +49,9 @@
 
 ;; The user option `tramp-gvfs-methods' contains the list of supported
 ;; connection methods.  Per default, these are "afp", "dav", "davs",
-;; "gdrive", "owncloud" and "sftp".
+;; "gdrive", "nextcloud" and "sftp".
 
-;; "gdrive" and "owncloud" connection methods require a respective
+;; "gdrive" and "nextcloud" connection methods require a respective
 ;; account in GNOME Online Accounts, with enabled "Files" service.
 
 ;; Other possible connection methods are "ftp", "http", "https" and
@@ -121,7 +121,7 @@
 
 ;;;###tramp-autoload
 (defcustom tramp-gvfs-methods
-  '("afp" "dav" "davs" "gdrive" "owncloud" "sftp")
+  '("afp" "dav" "davs" "gdrive" "nextcloud" "sftp")
   "List of methods for remote files, accessed with GVFS."
   :group 'tramp
   :version "27.1"
@@ -132,11 +132,11 @@
 			 (const "gdrive")
 			 (const "http")
 			 (const "https")
-			 (const "owncloud")
+			 (const "nextcloud")
 			 (const "sftp")
 			 (const "smb"))))
 
-(defconst tramp-goa-methods '("gdrive" "owncloud")
+(defconst tramp-goa-methods '("gdrive" "nextcloud")
   "List of methods which require registration at GNOME Online Accounts.")
 
 ;; Remove GNOME Online Accounts methods if not supported.
@@ -511,11 +511,11 @@ It has been changed in GVFS 1.14.")
 	  ":[[:blank:]]+\\(.*\\)$")
   "Regexp to parse GVFS file system attributes with `gvfs-info'.")
 
-(defconst tramp-gvfs-owncloud-default-prefix "/remote.php/webdav"
+(defconst tramp-gvfs-nextcloud-default-prefix "/remote.php/webdav"
   "Default prefix for owncloud / nextcloud methods.")
 
-(defconst tramp-gvfs-owncloud-default-prefix-regexp
-  (concat (regexp-quote tramp-gvfs-owncloud-default-prefix) "$")
+(defconst tramp-gvfs-nextcloud-default-prefix-regexp
+  (concat (regexp-quote tramp-gvfs-nextcloud-default-prefix) "$")
   "Regexp of default prefix for owncloud / nextcloud methods.")
 
 
@@ -1273,10 +1273,9 @@ file-notify events."
 	   (used (cdr (assoc "filesystem::used" attr)))
 	   (free (cdr (assoc "filesystem::free" attr))))
       (when (and (stringp size) (stringp used) (stringp free))
-	(list (string-to-number (concat size "e0"))
-	      (- (string-to-number (concat size "e0"))
-		 (string-to-number (concat used "e0")))
-	      (string-to-number (concat free "e0")))))))
+	(list (string-to-number size)
+	      (- (string-to-number size) (string-to-number used))
+	      (string-to-number free))))))
 
 (defun tramp-gvfs-handle-file-writable-p (filename)
   "Like `file-writable-p' for Tramp files."
@@ -1380,7 +1379,7 @@ file-notify events."
 	  (with-parsed-tramp-file-name filename nil
 	    (when (string-equal "gdrive" method)
 	      (setq method "google-drive"))
-	    (when (string-equal "owncloud" method)
+	    (when (string-equal "nextcloud" method)
 	      (setq method "davs"
 		    localname
 		    (concat (tramp-gvfs-get-remote-prefix v) localname)))
@@ -1543,8 +1542,8 @@ file-notify events."
 	  (setq method "davs"))
 	(when (and (string-equal "davs" method)
 		   (string-match
-		    tramp-gvfs-owncloud-default-prefix-regexp prefix))
-	  (setq method "owncloud"))
+		    tramp-gvfs-nextcloud-default-prefix-regexp prefix))
+	  (setq method "nextcloud"))
 	(when (string-equal "google-drive" method)
 	  (setq method "gdrive"))
 	(when (and (string-equal "http" method) (stringp uri))
@@ -1553,18 +1552,19 @@ file-notify events."
 		user (url-user uri)
 		host (url-host uri)
 		port (url-portspec uri)))
-	(with-parsed-tramp-file-name
-	    (tramp-make-tramp-file-name method user domain host port "") nil
-	  (tramp-message
-	   v 6 "%s %s"
-	   signal-name (tramp-gvfs-stringify-dbus-message mount-info))
-	  (tramp-flush-file-property v "/" "list-mounts")
-	  (if (string-equal (downcase signal-name) "unmounted")
-	      (tramp-flush-file-properties v "/")
-	    ;; Set mountpoint and location.
-	    (tramp-set-file-property v "/" "fuse-mountpoint" fuse-mountpoint)
-	    (tramp-set-connection-property
-	     v "default-location" default-location)))))))
+	(when (member method tramp-gvfs-methods)
+	  (with-parsed-tramp-file-name
+	      (tramp-make-tramp-file-name method user domain host port "") nil
+	    (tramp-message
+	     v 6 "%s %s"
+	     signal-name (tramp-gvfs-stringify-dbus-message mount-info))
+	    (tramp-flush-file-property v "/" "list-mounts")
+	    (if (string-equal (downcase signal-name) "unmounted")
+		(tramp-flush-file-properties v "/")
+	      ;; Set mountpoint and location.
+	      (tramp-set-file-property v "/" "fuse-mountpoint" fuse-mountpoint)
+	      (tramp-set-connection-property
+	       v "default-location" default-location))))))))
 
 (when tramp-gvfs-enabled
   (dbus-register-signal
@@ -1632,8 +1632,8 @@ file-notify events."
 	   (setq method "davs"))
 	 (when (and (string-equal "davs" method)
 		    (string-match
-		     tramp-gvfs-owncloud-default-prefix-regexp prefix))
-	   (setq method "owncloud"))
+		     tramp-gvfs-nextcloud-default-prefix-regexp prefix))
+	   (setq method "nextcloud"))
 	 (when (string-equal "google-drive" method)
 	   (setq method "gdrive"))
 	 (when (and (string-equal "http" method) (stringp uri))
@@ -1687,7 +1687,7 @@ It was \"a(say)\", but has changed to \"a{sv})\"."
 	 (localname (tramp-file-name-unquote-localname vec))
 	 (share (when (string-match "^/?\\([^/]+\\)" localname)
 		  (match-string 1 localname)))
-	 (ssl (if (string-match "^davs\\|^owncloud" method) "true" "false"))
+	 (ssl (if (string-match "^davs\\|^nextcloud" method) "true" "false"))
 	 (mount-spec
           `(:array
             ,@(cond
@@ -1695,7 +1695,7 @@ It was \"a(say)\", but has changed to \"a{sv})\"."
                 (list (tramp-gvfs-mount-spec-entry "type" "smb-share")
                       (tramp-gvfs-mount-spec-entry "server" host)
                       (tramp-gvfs-mount-spec-entry "share" share)))
-               ((string-match "^dav\\|^owncloud" method)
+               ((string-match "^dav\\|^nextcloud" method)
                 (list (tramp-gvfs-mount-spec-entry "type" "dav")
                       (tramp-gvfs-mount-spec-entry "host" host)
                       (tramp-gvfs-mount-spec-entry "ssl" ssl)))
@@ -1705,6 +1705,9 @@ It was \"a(say)\", but has changed to \"a{sv})\"."
                       (tramp-gvfs-mount-spec-entry "volume" share)))
                ((string-equal "gdrive" method)
                 (list (tramp-gvfs-mount-spec-entry "type" "google-drive")
+                      (tramp-gvfs-mount-spec-entry "host" host)))
+               ((string-equal "nextcloud" method)
+                (list (tramp-gvfs-mount-spec-entry "type" "owncloud")
                       (tramp-gvfs-mount-spec-entry "host" host)))
                ((string-match "^http" method)
                 (list (tramp-gvfs-mount-spec-entry "type" "http")
@@ -1979,6 +1982,8 @@ VEC is used only for traces."
 		   :port (match-string 3 identity)))
 	(when (string-equal (tramp-goa-name-method key) "google")
 	  (setf (tramp-goa-name-method key) "gdrive"))
+	(when (string-equal (tramp-goa-name-method key) "owncloud")
+	  (setf (tramp-goa-name-method key) "nextcloud"))
 	;; Cache all properties.
 	(dolist (prop (nconc account-properties files-properties))
 	  (tramp-set-connection-property key (car prop) (cdr prop)))
@@ -2085,7 +2090,7 @@ This uses \"avahi-browse\" in case D-Bus is not enabled in Avahi."
 ;; * (Customizable) unmount when exiting Emacs.  See tramp-archive.el.
 
 ;; * Host name completion for existing mount points (afp-server,
-;;   smb-server, google-drive, owncloud) or via smb-network or network.
+;;   smb-server, google-drive, nextcloud) or via smb-network or network.
 ;;
 ;; * Check, how two shares of the same SMB server can be mounted in
 ;;   parallel.

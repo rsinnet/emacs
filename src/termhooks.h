@@ -222,6 +222,10 @@ enum event_kind
   , DBUS_EVENT
 #endif
 
+#ifdef THREADS_ENABLED
+  , THREAD_EVENT
+#endif
+
   , CONFIG_CHANGED_EVENT
 
 #ifdef HAVE_NTGUI
@@ -346,7 +350,7 @@ enum {
      FIXNUM_BITS, so using it to represent a modifier key means that
      characters thus modified have different integer equivalents
      depending on the architecture they're running on.  Oh, and
-     applying XINT to a character whose 2^28 bit is set might sign-extend
+     applying XFIXNUM to a character whose 2^28 bit is set might sign-extend
      it, so you get a bunch of bits in the mask you didn't want.
 
      The CHAR_ macros are defined in lisp.h.  */
@@ -657,7 +661,7 @@ struct terminal
      frames on the terminal when it calls this hook, so infinite
      recursion is prevented.  */
   void (*delete_terminal_hook) (struct terminal *);
-};
+} GCALIGNED_STRUCT;
 
 INLINE bool
 TERMINALP (Lisp_Object a)

@@ -66,6 +66,7 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #include TERM_HEADER
 #endif /* HAVE_WINDOW_SYSTEM */
 
+#include "bignum.h"
 #include "intervals.h"
 #include "character.h"
 #include "buffer.h"
@@ -84,7 +85,7 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #include "composite.h"
 #include "dispextern.h"
 #include "ptr-bounds.h"
-#include "regex.h"
+#include "regex-emacs.h"
 #include "sheap.h"
 #include "syntax.h"
 #include "sysselect.h"
@@ -377,7 +378,7 @@ terminate_due_to_signal (int sig, int backtrace_limit)
 
           totally_unblock_input ();
           if (sig == SIGTERM || sig == SIGHUP || sig == SIGINT)
-            Fkill_emacs (make_number (sig));
+            Fkill_emacs (make_fixnum (sig));
 
           shut_down_emacs (sig, Qnil);
           emacs_backtrace (backtrace_limit);
@@ -446,7 +447,7 @@ init_cmdargs (int argc, char **argv, int skip_args, char *original_pwd)
     {
       Lisp_Object found;
       int yes = openp (Vexec_path, Vinvocation_name,
-		       Vexec_suffixes, &found, make_number (X_OK), false);
+		       Vexec_suffixes, &found, make_fixnum (X_OK), false);
       if (yes == 1)
 	{
 	  /* Add /: to the front of the name
@@ -712,10 +713,12 @@ main (int argc, char **argv)
   bool disable_aslr = dumping;
 # endif
 
-  if (disable_aslr && disable_address_randomization ())
+  if (disable_aslr && disable_address_randomization ()
+      && !getenv ("EMACS_HEAP_EXEC"))
     {
       /* Set this so the personality will be reverted before execs
-	 after this one.  */
+	 after this one, and to work around an re-exec loop on buggy
+	 kernels (Bug#32083).  */
       xputenv ("EMACS_HEAP_EXEC=true");
 
       /* Address randomization was enabled, but is now disabled.
@@ -844,9 +847,9 @@ main (int argc, char **argv)
     {
       rlim_t lim = rlim.rlim_cur;
 
-      /* Approximate the amount regex.c needs per unit of
+      /* Approximate the amount regex-emacs.c needs per unit of
 	 emacs_re_max_failures, then add 33% to cover the size of the
-	 smaller stacks that regex.c successively allocates and
+	 smaller stacks that regex-emacs.c successively allocates and
 	 discards on its way to the maximum.  */
       int min_ratio = 20 * sizeof (char *);
       int ratio = min_ratio + min_ratio / 3;
@@ -885,7 +888,7 @@ main (int argc, char **argv)
 		lim = newlim;
 	    }
 	}
-      /* If the stack is big enough, let regex.c more of it before
+      /* If the stack is big enough, let regex-emacs.c more of it before
          falling back to heap allocation.  */
       emacs_re_safe_alloca = max
         (min (lim - extra, SIZE_MAX) * (min_ratio / ratio),
@@ -1253,6 +1256,7 @@ Using an Emacs configured with --with-x-toolkit=lucid does not have this problem
     }
 
   init_alloc ();
+  init_bignum ();
   init_threads ();
 
   if (do_initial_setlocale)
@@ -2017,6 +2021,10 @@ all of which are called before Emacs is actually killed.  */
 {
   int exit_code;
 
+#ifdef HAVE_LIBSYSTEMD
+  sd_notify(0, "STOPPING=1");
+#endif /* HAVE_LIBSYSTEMD */
+
   /* Fsignal calls emacs_abort () if it sees that waiting_for_input is
      set.  */
   waiting_for_input = 0;
@@ -2046,10 +2054,10 @@ all of which are called before Emacs is actually killed.  */
       unlink (SSDATA (listfile));
     }
 
-  if (INTEGERP (arg))
-    exit_code = (XINT (arg) < 0
-		 ? XINT (arg) | INT_MIN
-		 : XINT (arg) & INT_MAX);
+  if (FIXNUMP (arg))
+    exit_code = (XFIXNUM (arg) < 0
+		 ? XFIXNUM (arg) | INT_MIN
+		 : XFIXNUM (arg) & INT_MAX);
   else
     exit_code = EXIT_SUCCESS;
   exit (exit_code);
@@ -2410,7 +2418,7 @@ decode_env_path (const char *evarname, const char *defalt, bool empty)
               && strncmp (path, emacs_dir_env, emacs_dir_len) == 0)
             element = Fexpand_file_name (Fsubstring
                                          (element,
-                                          make_number (emacs_dir_len),
+                                          make_fixnum (emacs_dir_len),
                                           Qnil),
                                          build_unibyte_string (emacs_dir));
 #endif
@@ -2476,6 +2484,13 @@ from the parent process and its tty file descriptors.  */)
   if (NILP (Vafter_init_time))
     error ("This function can only be called after loading the init files");
 #ifndef WINDOWSNT
+
+  if (daemon_type == 1)
+    {
+#ifdef HAVE_LIBSYSTEMD
+      sd_notify(0, "READY=1");
+#endif /* HAVE_LIBSYSTEMD */
+    }
 
   if (daemon_type == 2)
     {

@@ -359,6 +359,34 @@ was called."
   (lambda (&rest args2)
     (apply fun (append args args2))))
 
+(defun zerop (number)
+  "Return t if NUMBER is zero."
+  ;; Used to be in C, but it's pointless since (= 0 n) is faster anyway because
+  ;; = has a byte-code.
+  (declare (compiler-macro (lambda (_) `(= 0 ,number))))
+  (= 0 number))
+
+(defun fixnump (object)
+  "Return t if OBJECT is a fixnum."
+  (and (integerp object)
+       (<= most-negative-fixnum object most-positive-fixnum)))
+
+(defun bignump (object)
+  "Return t if OBJECT is a bignum."
+  (and (integerp object) (not (fixnump object))))
+
+(defun lsh (value count)
+  "Return VALUE with its bits shifted left by COUNT.
+If COUNT is negative, shifting is actually to the right.
+In this case, if VALUE is a negative fixnum treat it as unsigned,
+i.e., subtract 2 * most-negative-fixnum from VALUE before shifting it."
+  (when (and (< value 0) (< count 0))
+    (when (< value most-negative-fixnum)
+      (signal 'args-out-of-range (list value count)))
+    (setq value (logand (ash value -1) most-positive-fixnum))
+    (setq count (1+ count)))
+  (ash value count))
+
 
 ;;;; List functions.
 
@@ -547,13 +575,6 @@ If N is omitted or nil, remove the last element."
 	 (progn
 	   (if (> n 0) (setcdr (nthcdr (- (1- m) n) list) nil))
 	   list))))
-
-(defun zerop (number)
-  "Return t if NUMBER is zero."
-  ;; Used to be in C, but it's pointless since (= 0 n) is faster anyway because
-  ;; = has a byte-code.
-  (declare (compiler-macro (lambda (_) `(= 0 ,number))))
-  (= 0 number))
 
 (defun delete-dups (list)
   "Destructively remove `equal' duplicates from LIST.
@@ -2299,7 +2320,7 @@ some sort of escape sequence, the ambiguity is resolved via `read-key-delay'."
 If optional CONFIRM is non-nil, read the password twice to make sure.
 Optional DEFAULT is a default password to use instead of empty input.
 
-This function echoes `.' for each character that the user types.
+This function echoes `*' for each character that the user types.
 You could let-bind `read-hide-char' to another hiding character, though.
 
 Once the caller uses the password, it can erase the password
@@ -2325,7 +2346,7 @@ by doing (clear-string STRING)."
                                      beg)))
              (dotimes (i (- end beg))
                (put-text-property (+ i beg) (+ 1 i beg)
-                                  'display (string (or read-hide-char ?.))))))
+                                  'display (string (or read-hide-char ?*))))))
           minibuf)
       (minibuffer-with-setup-hook
           (lambda ()
@@ -2340,7 +2361,7 @@ by doing (clear-string STRING)."
             (add-hook 'after-change-functions hide-chars-fun nil 'local))
         (unwind-protect
             (let ((enable-recursive-minibuffers t)
-		  (read-hide-char (or read-hide-char ?.)))
+		  (read-hide-char (or read-hide-char ?*)))
               (read-string prompt nil t default)) ; t = "no history"
           (when (buffer-live-p minibuf)
             (with-current-buffer minibuf
@@ -4687,25 +4708,6 @@ The properties used on SYMBOL are `composefunc', `sendfunc',
   (put symbol 'hookvar (or hookvar 'mail-send-hook)))
 
 
-(defun backtrace--print-frame (evald func args flags)
-  "Print a trace of a single stack frame to `standard-output'.
-EVALD, FUNC, ARGS, FLAGS are as in `mapbacktrace'."
-  (princ (if (plist-get flags :debug-on-exit) "* " "  "))
-  (cond
-   ((and evald (not debugger-stack-frame-as-list))
-    (cl-prin1 func)
-    (if args (cl-prin1 args) (princ "()")))
-   (t
-    (cl-prin1 (cons func args))))
-  (princ "\n"))
-
-(defun backtrace ()
-  "Print a trace of Lisp function calls currently active.
-Output stream used is value of `standard-output'."
-  (let ((print-level (or print-level 8))
-        (print-escape-control-characters t))
-    (mapbacktrace #'backtrace--print-frame 'backtrace)))
-
 (defun backtrace-frames (&optional base)
   "Collect all frames of current backtrace into a list.
 If non-nil, BASE should be a function, and frames before its

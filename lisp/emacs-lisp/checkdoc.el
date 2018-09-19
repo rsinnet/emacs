@@ -1237,9 +1237,6 @@ TEXT, START, END and UNFIXABLE conform to
 ;;;###autoload
 (define-minor-mode checkdoc-minor-mode
   "Toggle automatic docstring checking (Checkdoc minor mode).
-With a prefix argument ARG, enable Checkdoc minor mode if ARG is
-positive, and disable it otherwise.  If called from Lisp, enable
-the mode if ARG is omitted or nil.
 
 In Checkdoc minor mode, the usual bindings for `eval-defun' which is
 bound to \\<checkdoc-minor-mode-map>\\[checkdoc-eval-defun] and `checkdoc-eval-current-buffer' are overridden to include
@@ -1840,7 +1837,7 @@ Replace with \"%s\"? " original replace)
 		 (if (checkdoc-autofix-ask-replace
 		      (match-beginning 1) (+ (match-beginning 1)
 					     (length ms))
-		      msg (format-message "`%s'" ms) t)
+		      msg (format "`%s'" ms) t)
 		     (setq msg nil)
 		   (setq msg
 			 (format-message

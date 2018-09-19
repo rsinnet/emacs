@@ -1745,7 +1745,9 @@ handled properly.  BODY shall not contain a timeout."
   ;; Host names must match rules in case the command template of a
   ;; method doesn't use them.
   (dolist (m '("su" "sg" "sudo" "doas" "ksu"))
-    (let (tramp-default-proxies-alist)
+    (let ((vec (tramp-dissect-file-name tramp-test-temporary-file-directory))
+	  tramp-connection-properties tramp-default-proxies-alist)
+      (ignore-errors (tramp-cleanup-connection vec nil 'keep-password))
       ;; Single hop.  The host name must match `tramp-local-host-regexp'.
       (should-error
        (find-file (format "/%s:foo:" m))
@@ -1758,9 +1760,7 @@ handled properly.  BODY shall not contain a timeout."
 	 (substring (file-remote-p tramp-test-temporary-file-directory) 0 -1)
 	 m))
        :type
-       (if (tramp-method-out-of-band-p
-	    (tramp-dissect-file-name tramp-test-temporary-file-directory) 0)
-	   'file-error 'user-error)))))
+       (if (tramp-method-out-of-band-p vec 0) 'file-error 'user-error)))))
 
 (ert-deftest tramp-test03-file-name-method-rules ()
   "Check file name rules for some methods."
@@ -2182,7 +2182,7 @@ This checks also `file-name-as-directory', `file-name-directory',
 	  (unwind-protect
 	      ;; FIXME: This fails on my QNAP server, see
 	      ;; /share/Web/owncloud/data/owncloud.log
-	      (unless (tramp--test-owncloud-p)
+	      (unless (tramp--test-nextcloud-p)
 		(write-region "foo" nil source)
 		(should (file-exists-p source))
 		(make-directory target)
@@ -2205,7 +2205,7 @@ This checks also `file-name-as-directory', `file-name-directory',
 	  (unwind-protect
 	      ;; FIXME: This fails on my QNAP server, see
 	      ;; /share/Web/owncloud/data/owncloud.log
-	      (unless (and (tramp--test-owncloud-p)
+	      (unless (and (tramp--test-nextcloud-p)
 			   (or (not (file-remote-p source))
 			       (not (file-remote-p target))))
 		(make-directory source)
@@ -2231,7 +2231,7 @@ This checks also `file-name-as-directory', `file-name-directory',
 	      ;; FIXME: This fails on my QNAP server, see
 	      ;; /share/Web/owncloud/data/owncloud.log
 	      (unless
-		  (and (tramp--test-owncloud-p) (not (file-remote-p source)))
+		  (and (tramp--test-nextcloud-p) (not (file-remote-p source)))
 		(make-directory source)
 		(should (file-directory-p source))
 		(write-region "foo" nil (expand-file-name "foo" source))
@@ -2320,7 +2320,7 @@ This checks also `file-name-as-directory', `file-name-directory',
 	  (unwind-protect
 	      ;; FIXME: This fails on my QNAP server, see
 	      ;; /share/Web/owncloud/data/owncloud.log
-	      (unless (tramp--test-owncloud-p)
+	      (unless (tramp--test-nextcloud-p)
 		(make-directory source)
 		(should (file-directory-p source))
 		(write-region "foo" nil (expand-file-name "foo" source))
@@ -2344,7 +2344,7 @@ This checks also `file-name-as-directory', `file-name-directory',
 	  (unwind-protect
 	      ;; FIXME: This fails on my QNAP server, see
 	      ;; /share/Web/owncloud/data/owncloud.log
-	      (unless (tramp--test-owncloud-p)
+	      (unless (tramp--test-nextcloud-p)
 		(make-directory source)
 		(should (file-directory-p source))
 		(write-region "foo" nil (expand-file-name "foo" source))
@@ -3219,11 +3219,12 @@ This tests also `make-symbolic-link', `file-truename' and `add-name-to-file'."
 	    ;; `current-time'.  Therefore, we use '(0 1).  We skip the
 	    ;; test, if the remote handler is not able to set the
 	    ;; correct time.
-	    (skip-unless (set-file-times tmp-name1 '(0 1)))
+	    (skip-unless (set-file-times tmp-name1 (seconds-to-time 1)))
 	    ;; Dumb remote shells without perl(1) or stat(1) are not
 	    ;; able to return the date correctly.  They say "don't know".
 	    (unless (equal (nth 5 (file-attributes tmp-name1)) '(0 0))
-	      (should (equal (nth 5 (file-attributes tmp-name1)) '(0 1)))
+	      (should
+	       (equal (nth 5 (file-attributes tmp-name1)) (seconds-to-time 1)))
 	      (write-region "bla" nil tmp-name2)
 	      (should (file-exists-p tmp-name2))
 	      (should (file-newer-than-file-p tmp-name2 tmp-name1))
@@ -4427,10 +4428,10 @@ This does not support external Emacs calls."
   (string-equal
    "mock" (file-remote-p tramp-test-temporary-file-directory 'method)))
 
-(defun tramp--test-owncloud-p ()
-  "Check, whether the owncloud method is used."
+(defun tramp--test-nextcloud-p ()
+  "Check, whether the nextcloud method is used."
   (string-equal
-   "owncloud" (file-remote-p tramp-test-temporary-file-directory 'method)))
+   "nextcloud" (file-remote-p tramp-test-temporary-file-directory 'method)))
 
 (defun tramp--test-rsync-p ()
   "Check, whether the rsync method is used.
@@ -4883,7 +4884,7 @@ Use the `ls' command."
   "Check parallel asynchronous requests.
 Such requests could arrive from timers, process filters and
 process sentinels.  They shall not disturb each other."
-  :tags '(:expensive-test)
+  :tags '(:expensive-test :unstable)
   (skip-unless (tramp--test-enabled))
   (skip-unless (tramp--test-sh-p))
 
@@ -5056,6 +5057,8 @@ process sentinels.  They shall not disturb each other."
 ;; This test is inspired by Bug#29163.
 (ert-deftest tramp-test43-auto-load ()
   "Check that Tramp autoloads properly."
+  (skip-unless (tramp--test-enabled))
+
   (let ((default-directory (expand-file-name temporary-file-directory))
 	(code
 	 (format
@@ -5166,42 +5169,52 @@ Since it unloads Tramp, it shall be the last test to run."
   ;; cannot test older Emacsen, therefore.
   (skip-unless (tramp--test-emacs26-p))
 
-  (when (featurep 'tramp)
-    (unload-feature 'tramp 'force)
-    ;; No Tramp feature must be left.
-    (should-not (featurep 'tramp))
-    (should-not (all-completions "tramp" (delq 'tramp-tests features)))
-    ;; `file-name-handler-alist' must be clean.
-    (should-not (all-completions "tramp" (mapcar 'cdr file-name-handler-alist)))
-    ;; There shouldn't be left a bound symbol, except buffer-local
-    ;; variables, and autoload functions.  We do not regard our test
-    ;; symbols, and the Tramp unload hooks.
-    (mapatoms
-     (lambda (x)
-       (and (or (and (boundp x) (null (local-variable-if-set-p x)))
-		(and (functionp x) (null (autoloadp (symbol-function x)))))
-	    (string-match "^tramp" (symbol-name x))
-	    (not (string-match "^tramp--?test" (symbol-name x)))
-	    (not (string-match "unload-hook$" (symbol-name x)))
-	    (ert-fail (format "`%s' still bound" x)))))
-    ;; The defstruct `tramp-file-name' and all its internal functions
-    ;; shall be purged.
-    (should-not (cl--find-class 'tramp-file-name))
-    (mapatoms
-     (lambda (x)
-       (and (functionp x)
-            (string-match "tramp-file-name" (symbol-name x))
-            (ert-fail (format "Structure function `%s' still exists" x)))))
-    ;; There shouldn't be left a hook function containing a Tramp
-    ;; function.  We do not regard the Tramp unload hooks.
-    (mapatoms
-     (lambda (x)
-       (and (boundp x)
-	    (string-match "-\\(hook\\|function\\)s?$" (symbol-name x))
-	    (not (string-match "unload-hook$" (symbol-name x)))
-	    (consp (symbol-value x))
-	    (ignore-errors (all-completions "tramp" (symbol-value x)))
-	    (ert-fail (format "Hook `%s' still contains Tramp function" x)))))))
+  ;; We have autoloaded objects from tramp.el and tramp-archive.el.
+  ;; In order to remove them, we first need to load both packages.
+  (require 'tramp)
+  (require 'tramp-archive)
+  (should (featurep 'tramp))
+  (should (featurep 'tramp-archive))
+  ;; This unloads also tramp-archive.el and tramp-theme.el if needed.
+  (unload-feature 'tramp 'force)
+  ;; No Tramp feature must be left.
+  (should-not (featurep 'tramp))
+  (should-not (featurep 'tramp-archive))
+  (should-not (featurep 'tramp-theme))
+  (should-not
+   (all-completions
+    "tramp" (delq 'tramp-tests (delq 'tramp-archive-tests features))))
+  ;; `file-name-handler-alist' must be clean.
+  (should-not (all-completions "tramp" (mapcar 'cdr file-name-handler-alist)))
+  ;; There shouldn't be left a bound symbol, except buffer-local
+  ;; variables, and autoload functions.  We do not regard our test
+  ;; symbols, and the Tramp unload hooks.
+  (mapatoms
+   (lambda (x)
+     (and (or (and (boundp x) (null (local-variable-if-set-p x)))
+	      (and (functionp x) (null (autoloadp (symbol-function x)))))
+	  (string-match "^tramp" (symbol-name x))
+	  (not (string-match "^tramp\\(-archive\\)?--?test" (symbol-name x)))
+	  (not (string-match "unload-hook$" (symbol-name x)))
+	  (ert-fail (format "`%s' still bound" x)))))
+  ;; The defstruct `tramp-file-name' and all its internal functions
+  ;; shall be purged.
+  (should-not (cl--find-class 'tramp-file-name))
+  (mapatoms
+   (lambda (x)
+     (and (functionp x)
+          (string-match "tramp-file-name" (symbol-name x))
+          (ert-fail (format "Structure function `%s' still exists" x)))))
+  ;; There shouldn't be left a hook function containing a Tramp
+  ;; function.  We do not regard the Tramp unload hooks.
+  (mapatoms
+   (lambda (x)
+     (and (boundp x)
+	  (string-match "-\\(hook\\|function\\)s?$" (symbol-name x))
+	  (not (string-match "unload-hook$" (symbol-name x)))
+	  (consp (symbol-value x))
+	  (ignore-errors (all-completions "tramp" (symbol-value x)))
+	  (ert-fail (format "Hook `%s' still contains Tramp function" x))))))
 
 (defun tramp-test-all (&optional interactive)
   "Run all tests for \\[tramp]."
@@ -5222,7 +5235,7 @@ Since it unloads Tramp, it shall be the last test to run."
 ;; * Fix `tramp-test05-expand-file-name-relative' in `expand-file-name'.
 ;; * Fix `tramp-test06-directory-file-name' for `ftp'.
 ;; * Investigate, why `tramp-test11-copy-file' and `tramp-test12-rename-file'
-;;   do not work properly for `owncloud'.
+;;   do not work properly for `nextcloud'.
 ;; * Fix `tramp-test29-start-file-process' on MS Windows (`process-send-eof'?).
 ;; * Fix `tramp-test30-interrupt-process', timeout doesn't work reliably.
 ;; * Fix Bug#16928 in `tramp-test42-asynchronous-requests'.

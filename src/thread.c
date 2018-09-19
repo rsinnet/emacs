@@ -25,6 +25,7 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #include "process.h"
 #include "coding.h"
 #include "syssignal.h"
+#include "keyboard.h"
 
 static struct thread_state main_thread;
 
@@ -34,14 +35,13 @@ static struct thread_state *all_threads = &main_thread;
 
 static sys_mutex_t global_lock;
 
-extern int poll_suppress_count;
 extern volatile int interrupt_input_blocked;
 
 
 
 /* m_specpdl is set when the thread is created and cleared when the
    thread dies.  */
-#define thread_alive_p(STATE) ((STATE)->m_specpdl != NULL)
+#define thread_live_p(STATE) ((STATE)->m_specpdl != NULL)
 
 
 
@@ -681,7 +681,7 @@ invoke_thread_function (void)
 {
   ptrdiff_t count = SPECPDL_INDEX ();
 
-  Ffuncall (1, &current_thread->function);
+  current_thread->result = Ffuncall (1, &current_thread->function);
   return unbind_to (count, Qnil);
 }
 
@@ -789,6 +789,7 @@ If NAME is given, it must be a string; it names the new thread.  */)
   new_thread->m_last_thing_searched = Qnil; /* copy from parent? */
   new_thread->m_saved_last_thing_searched = Qnil;
   new_thread->m_current_buffer = current_thread->m_current_buffer;
+  new_thread->result = Qnil;
   new_thread->error_symbol = Qnil;
   new_thread->error_data = Qnil;
   new_thread->event_object = Qnil;
@@ -862,7 +863,8 @@ DEFUN ("thread-signal", Fthread_signal, Sthread_signal, 3, 3, 0,
 This acts like `signal', but arranges for the signal to be raised
 in THREAD.  If THREAD is the current thread, acts just like `signal'.
 This will interrupt a blocked call to `mutex-lock', `condition-wait',
-or `thread-join' in the target thread.  */)
+or `thread-join' in the target thread.
+If THREAD is the main thread, just the error message is shown.  */)
   (Lisp_Object thread, Lisp_Object error_symbol, Lisp_Object data)
 {
   struct thread_state *tstate;
@@ -873,18 +875,36 @@ or `thread-join' in the target thread.  */)
   if (tstate == current_thread)
     Fsignal (error_symbol, data);
 
-  /* What to do if thread is already signaled?  */
-  /* What if error_symbol is Qnil?  */
-  tstate->error_symbol = error_symbol;
-  tstate->error_data = data;
+#ifdef THREADS_ENABLED
+  if (main_thread_p (tstate))
+    {
+      /* Construct an event.  */
+      struct input_event event;
+      EVENT_INIT (event);
+      event.kind = THREAD_EVENT;
+      event.frame_or_window = Qnil;
+      event.arg = list3 (Fcurrent_thread (), error_symbol, data);
 
-  if (tstate->wait_condvar)
-    flush_stack_call_func (thread_signal_callback, tstate);
+      /* Store it into the input event queue.  */
+      kbd_buffer_store_event (&event);
+    }
+
+  else
+#endif
+    {
+      /* What to do if thread is already signaled?  */
+      /* What if error_symbol is Qnil?  */
+      tstate->error_symbol = error_symbol;
+      tstate->error_data = data;
+
+      if (tstate->wait_condvar)
+	flush_stack_call_func (thread_signal_callback, tstate);
+    }
 
   return Qnil;
 }
 
-DEFUN ("thread-alive-p", Fthread_alive_p, Sthread_alive_p, 1, 1, 0,
+DEFUN ("thread-live-p", Fthread_live_p, Sthread_live_p, 1, 1, 0,
        doc: /* Return t if THREAD is alive, or nil if it has exited.  */)
   (Lisp_Object thread)
 {
@@ -893,7 +913,7 @@ DEFUN ("thread-alive-p", Fthread_alive_p, Sthread_alive_p, 1, 1, 0,
   CHECK_THREAD (thread);
   tstate = XTHREAD (thread);
 
-  return thread_alive_p (tstate) ? Qt : Qnil;
+  return thread_live_p (tstate) ? Qt : Qnil;
 }
 
 DEFUN ("thread--blocker", Fthread_blocker, Sthread_blocker, 1, 1, 0,
@@ -923,7 +943,7 @@ thread_join_callback (void *arg)
   XSETTHREAD (thread, tstate);
   self->event_object = thread;
   self->wait_condvar = &tstate->thread_condvar;
-  while (thread_alive_p (tstate) && NILP (self->error_symbol))
+  while (thread_live_p (tstate) && NILP (self->error_symbol))
     sys_cond_wait (self->wait_condvar, &global_lock);
 
   self->wait_condvar = NULL;
@@ -933,12 +953,13 @@ thread_join_callback (void *arg)
 
 DEFUN ("thread-join", Fthread_join, Sthread_join, 1, 1, 0,
        doc: /* Wait for THREAD to exit.
-This blocks the current thread until THREAD exits or until
-the current thread is signaled.
-It is an error for a thread to try to join itself.  */)
+This blocks the current thread until THREAD exits or until the current
+thread is signaled.  It returns the result of the THREAD function.  It
+is an error for a thread to try to join itself.  */)
   (Lisp_Object thread)
 {
   struct thread_state *tstate;
+  Lisp_Object error_symbol, error_data;
 
   CHECK_THREAD (thread);
   tstate = XTHREAD (thread);
@@ -946,10 +967,16 @@ It is an error for a thread to try to join itself.  */)
   if (tstate == current_thread)
     error ("Cannot join current thread");
 
-  if (thread_alive_p (tstate))
+  error_symbol = tstate->error_symbol;
+  error_data = tstate->error_data;
+
+  if (thread_live_p (tstate))
     flush_stack_call_func (thread_join_callback, tstate);
 
-  return Qnil;
+  if (!NILP (error_symbol))
+    Fsignal (error_symbol, error_data);
+
+  return tstate->result;
 }
 
 DEFUN ("all-threads", Fall_threads, Sall_threads, 0, 0, 0,
@@ -961,7 +988,7 @@ DEFUN ("all-threads", Fall_threads, Sall_threads, 0, 0, 0,
 
   for (iter = all_threads; iter; iter = iter->next_thread)
     {
-      if (thread_alive_p (iter))
+      if (thread_live_p (iter))
 	{
 	  Lisp_Object thread;
 
@@ -973,11 +1000,17 @@ DEFUN ("all-threads", Fall_threads, Sall_threads, 0, 0, 0,
   return result;
 }
 
-DEFUN ("thread-last-error", Fthread_last_error, Sthread_last_error, 0, 0, 0,
-       doc: /* Return the last error form recorded by a dying thread.  */)
-  (void)
+DEFUN ("thread-last-error", Fthread_last_error, Sthread_last_error, 0, 1, 0,
+       doc: /* Return the last error form recorded by a dying thread.
+If CLEANUP is non-nil, remove this error form from history.  */)
+     (Lisp_Object cleanup)
 {
-  return last_thread_error;
+  Lisp_Object result = last_thread_error;
+
+  if (!NILP (cleanup))
+    last_thread_error = Qnil;
+
+  return result;
 }
 
 
@@ -1011,6 +1044,7 @@ init_main_thread (void)
   main_thread.m_saved_last_thing_searched = Qnil;
   main_thread.name = Qnil;
   main_thread.function = Qnil;
+  main_thread.result = Qnil;
   main_thread.error_symbol = Qnil;
   main_thread.error_data = Qnil;
   main_thread.event_object = Qnil;
@@ -1059,7 +1093,7 @@ syms_of_threads (void)
       defsubr (&Scurrent_thread);
       defsubr (&Sthread_name);
       defsubr (&Sthread_signal);
-      defsubr (&Sthread_alive_p);
+      defsubr (&Sthread_live_p);
       defsubr (&Sthread_join);
       defsubr (&Sthread_blocker);
       defsubr (&Sall_threads);
@@ -1076,9 +1110,22 @@ syms_of_threads (void)
 
       staticpro (&last_thread_error);
       last_thread_error = Qnil;
+
+      Fdefalias (intern_c_string ("thread-alive-p"),
+		 intern_c_string ("thread-live-p"), Qnil);
+
+      Fprovide (intern_c_string ("threads"), Qnil);
     }
 
   DEFSYM (Qthreadp, "threadp");
   DEFSYM (Qmutexp, "mutexp");
   DEFSYM (Qcondition_variable_p, "condition-variable-p");
+
+  DEFVAR_LISP ("main-thread", Vmain_thread,
+    doc: /* The main thread of Emacs.  */);
+#ifdef THREADS_ENABLED
+  XSETTHREAD (Vmain_thread, &main_thread);
+#else
+  Vmain_thread = Qnil;
+#endif
 }

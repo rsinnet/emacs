@@ -4677,8 +4677,7 @@ scrolling (struct frame *frame)
 	{
 	  /* This line cannot be redrawn, so don't let scrolling mess it.  */
 	  new_hash[i] = old_hash[i];
-#define INFINITY 1000000	/* Taken from scroll.c */
-	  draw_cost[i] = INFINITY;
+	  draw_cost[i] = SCROLL_INFINITY;
 	}
       else
 	{
@@ -5717,8 +5716,8 @@ additional wait period, in milliseconds; this is for backwards compatibility.
 
   if (!NILP (milliseconds))
     {
-      CHECK_NUMBER (milliseconds);
-      duration += XINT (milliseconds) / 1000.0;
+      CHECK_FIXNUM (milliseconds);
+      duration += XFIXNUM (milliseconds) / 1000.0;
     }
 
   if (duration > 0)
@@ -5768,9 +5767,18 @@ sit_for (Lisp_Object timeout, bool reading, int display_option)
 
   if (INTEGERP (timeout))
     {
-      sec = XINT (timeout);
-      if (sec <= 0)
-	return Qt;
+      if (integer_to_intmax (timeout, &sec))
+	{
+	  if (sec <= 0)
+	    return Qt;
+	  sec = min (sec, WAIT_READING_MAX);
+	}
+      else
+	{
+	  if (NILP (Fnatnump (timeout)))
+	    return Qt;
+	  sec = WAIT_READING_MAX;
+	}
       nsec = 0;
     }
   else if (FLOATP (timeout))
@@ -5828,8 +5836,7 @@ immediately by pending input.  */)
   if (!NILP (force) && !redisplay_dont_pause)
     specbind (Qredisplay_dont_pause, Qt);
   redisplay_preserve_echo_area (2);
-  unbind_to (count, Qnil);
-  return Qt;
+  return unbind_to (count, Qt);
 }
 
 
@@ -5926,7 +5933,7 @@ pass nil for VARIABLE.  */)
       || n + 20 < ASIZE (state) / 2)
     /* Add 20 extra so we grow it less often.  */
     {
-      state = Fmake_vector (make_number (n + 20), Qlambda);
+      state = Fmake_vector (make_fixnum (n + 20), Qlambda);
       if (! NILP (variable))
 	Fset (variable, state);
       else
@@ -6042,7 +6049,7 @@ init_display (void)
     {
       Vinitial_window_system = Qx;
 #ifdef HAVE_X11
-      Vwindow_system_version = make_number (11);
+      Vwindow_system_version = make_fixnum (11);
 #endif
 #ifdef USE_NCURSES
       /* In some versions of ncurses,
@@ -6058,7 +6065,7 @@ init_display (void)
   if (!inhibit_window_system)
     {
       Vinitial_window_system = Qw32;
-      Vwindow_system_version = make_number (1);
+      Vwindow_system_version = make_fixnum (1);
       return;
     }
 #endif /* HAVE_NTGUI */
@@ -6071,7 +6078,7 @@ init_display (void)
       )
     {
       Vinitial_window_system = Qns;
-      Vwindow_system_version = make_number (10);
+      Vwindow_system_version = make_fixnum (10);
       return;
     }
 #endif
@@ -6224,7 +6231,7 @@ syms_of_display (void)
   defsubr (&Sdump_redisplay_history);
 #endif
 
-  frame_and_buffer_state = Fmake_vector (make_number (20), Qlambda);
+  frame_and_buffer_state = Fmake_vector (make_fixnum (20), Qlambda);
   staticpro (&frame_and_buffer_state);
 
   /* This is the "purpose" slot of a display table.  */

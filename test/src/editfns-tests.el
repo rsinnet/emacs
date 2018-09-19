@@ -88,7 +88,21 @@
            (format "%-10s" (concat (propertize "01" 'face 'bold)
                                    (propertize "23" 'face 'underline)
                                    (propertize "45" 'face 'italic)))
-           #("012345    " 0 2 (face bold) 2 4 (face underline) 4 10 (face italic)))))
+           #("012345    "
+             0 2 (face bold) 2 4 (face underline) 4 10 (face italic))))
+  ;; Bug #32404
+  (should (ert-equal-including-properties
+           (format (concat (propertize "%s" 'face 'bold)
+                           ""
+                           (propertize "%s" 'face 'error))
+                   "foo" "bar")
+           #("foobar" 0 3 (face bold) 3 6 (face error))))
+  (should (ert-equal-including-properties
+           (format (concat "%s" (propertize "%s" 'face 'error)) "foo" "bar")
+           #("foobar" 3 6 (face error))))
+  (should (ert-equal-including-properties
+           (format (concat "%s " (propertize "%s" 'face 'error)) "foo" "bar")
+           #("foo bar" 4 7 (face error)))))
 
 ;; Tests for bug#5131.
 (defun transpose-test-reverse-word (start end)
@@ -159,23 +173,36 @@
   (should-error (format "%x" 18446744073709551616.0)
                 :type 'overflow-error))
 (ert-deftest read-large-integer ()
-  (should-error (read (format "%d0" most-negative-fixnum))
-                :type 'overflow-error)
-  (should-error (read (format "%+d" (* -8.0 most-negative-fixnum)))
-                :type 'overflow-error)
-  (should-error (read (substring (format "%d" most-negative-fixnum) 1))
-                :type 'overflow-error)
-  (should-error (read (format "#x%x" most-negative-fixnum))
-                :type 'overflow-error)
-  (should-error (read (format "#o%o" most-negative-fixnum))
-                :type 'overflow-error)
-  (should-error (read (format "#32rG%x" most-positive-fixnum))
-                :type 'overflow-error))
+  (should (eq (type-of (read (format "%d0" most-negative-fixnum))) 'integer))
+  (should (eq (type-of (read (format "%+d" (* -8.0 most-negative-fixnum))))
+              'integer))
+  (should (eq (type-of (read (substring (format "%d" most-negative-fixnum) 1)))
+              'integer))
+  (should (eq (type-of (read (format "#x%x" most-negative-fixnum)))
+              'integer))
+  (should (eq (type-of (read (format "#o%o" most-negative-fixnum)))
+              'integer))
+  (should (eq (type-of (read (format "#32rG%x" most-positive-fixnum)))
+              'integer))
+  (let ((binary-as-unsigned nil))
+    (dolist (fmt '("%d" "%s" "#o%o" "#x%x"))
+      (dolist (val (list most-negative-fixnum (1+ most-negative-fixnum)
+                         -1 0 1
+                         (1- most-positive-fixnum) most-positive-fixnum))
+        (should (eq val (read (format fmt val))))))))
 
 (ert-deftest format-%o-invalid-float ()
   (should-error (format "%o" -1e-37)
                 :type 'overflow-error))
 
+;; Bug#31938
+(ert-deftest format-%d-float ()
+  (should (string-equal (format "%d" -1.1) "-1"))
+  (should (string-equal (format "%d" -0.9) "0"))
+  (should (string-equal (format "%d" -0.0) "0"))
+  (should (string-equal (format "%d" 0.0) "0"))
+  (should (string-equal (format "%d" 0.9) "0"))
+  (should (string-equal (format "%d" 1.1) "1")))
 
 ;;; Check format-time-string with various TZ settings.
 ;;; Use only POSIX-compatible TZ values, since the tests should work
@@ -225,6 +252,16 @@
   (should (stringp
            (format-time-string "%Y-%m-%d %H:%M:%S.%3N %z" nil
                                (concat (make-string 2048 ?X) "0")))))
+
+(defun editfns-tests--have-leap-seconds ()
+  (string-equal (format-time-string "%Y-%m-%d %H:%M:%S" 78796800 t)
+                "1972-06-30 23:59:60"))
+
+(ert-deftest format-time-string-with-bignum-on-32-bit ()
+  (should (or (string-equal
+               (format-time-string "%Y-%m-%d %H:%M:%S" (- (ash 1 31) 3600) t)
+               "2038-01-19 02:14:08")
+              (editfns-tests--have-leap-seconds))))
 
 (ert-deftest format-with-field ()
   (should (equal (format "First argument %2$s, then %3$s, then %1$s" 1 2 3)
@@ -349,5 +386,28 @@
     (should (eq (type-of (car (nth 3 buffer-undo-list))) 'marker))
     (should (eq (type-of (car (nth 4 buffer-undo-list))) 'marker))
     (garbage-collect)))
+
+(ert-deftest format-bignum ()
+  (let* ((s1 "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+         (v1 (read (concat "#x" s1)))
+         (s2 "99999999999999999999999999999999")
+         (v2 (read s2))
+         (v3 #x-3ffffffffffffffe000000000000000))
+    (should (> v1 most-positive-fixnum))
+    (should (equal (format "%X" v1) s1))
+    (should (> v2 most-positive-fixnum))
+    (should (equal (format "%d" v2) s2))
+    (should (equal (format "%d" v3) "-5316911983139663489309385231907684352"))
+    (should (equal (format "%+d" v3) "-5316911983139663489309385231907684352"))
+    (should (equal (format "%+d" (- v3))
+                   "+5316911983139663489309385231907684352"))
+    (should (equal (format "% d" (- v3))
+                   " 5316911983139663489309385231907684352"))
+    (should (equal (format "%o" v3)
+                   "-37777777777777777777600000000000000000000"))
+    (should (equal (format "%#50.40x" v3)
+                   "        -0x000000003ffffffffffffffe000000000000000"))
+    (should (equal (format "%-#50.40x" v3)
+                   "-0x000000003ffffffffffffffe000000000000000        "))))
 
 ;;; editfns-tests.el ends here

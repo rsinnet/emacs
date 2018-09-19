@@ -483,7 +483,7 @@ static Lisp_Object
 store_terminal_param (struct terminal *t, Lisp_Object parameter, Lisp_Object value)
 {
   Lisp_Object old_alist_elt = Fassq (parameter, t->param_alist);
-  if (EQ (old_alist_elt, Qnil))
+  if (NILP (old_alist_elt))
     {
       tset_param_alist (t, Fcons (Fcons (parameter, value), t->param_alist));
       return Qnil;
@@ -551,10 +551,10 @@ calculate_glyph_code_table (struct terminal *t)
       struct unimapdesc unimapdesc = { entry_ct, entries };
       if (ioctl (fd, GIO_UNIMAP, &unimapdesc) == 0)
 	{
-	  glyphtab = Fmake_char_table (Qnil, make_number (-1));
+	  glyphtab = Fmake_char_table (Qnil, make_fixnum (-1));
 	  for (int i = 0; i < unimapdesc.entry_ct; i++)
 	    char_table_set (glyphtab, entries[i].unicode,
-			    make_number (entries[i].fontpos));
+			    make_fixnum (entries[i].fontpos));
 	  break;
 	}
       if (errno != ENOMEM)

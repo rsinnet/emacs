@@ -7,6 +7,8 @@
 ;; Maintainer: Michael Albinus <michael.albinus@gmx.de>
 ;; Keywords: comm, processes
 ;; Package: tramp
+;; Version: 2.4.1-pre
+;; Package-Requires: ((emacs "24.1"))
 
 ;; This file is part of GNU Emacs.
 
@@ -34,8 +36,6 @@
 ;;
 ;; Notes:
 ;; -----
-;;
-;; This package only works for Emacs 24.1 and higher.
 ;;
 ;; Also see the todo list at the bottom of this file.
 ;;
@@ -1954,7 +1954,6 @@ For definition of that list see `tramp-set-completion-function'."
    ;; The method related defaults.
    (cdr (assoc method tramp-completion-function-alist))))
 
-
 ;;; Fontification of `read-file-name':
 
 (defvar tramp-rfn-eshadow-overlay)
@@ -1964,11 +1963,11 @@ For definition of that list see `tramp-set-completion-function'."
   "Set up a minibuffer for `file-name-shadow-mode'.
 Adds another overlay hiding filename parts according to Tramp's
 special handling of `substitute-in-file-name'."
-  (when (symbol-value 'minibuffer-completing-file-name)
+  (when minibuffer-completing-file-name
     (setq tramp-rfn-eshadow-overlay
 	  (make-overlay (minibuffer-prompt-end) (minibuffer-prompt-end)))
     ;; Copy rfn-eshadow-overlay properties.
-    (let ((props (overlay-properties (symbol-value 'rfn-eshadow-overlay))))
+    (let ((props (overlay-properties rfn-eshadow-overlay)))
       (while props
  	;; The `field' property prevents correct minibuffer
  	;; completion; we exclude it.
@@ -1986,6 +1985,13 @@ special handling of `substitute-in-file-name'."
 (defun tramp-rfn-eshadow-update-overlay-regexp ()
   (format "[^%s/~]*\\(/\\|~\\)" tramp-postfix-host-format))
 
+;; Package rfn-eshadow is preloaded in Emacs, but for some reason,
+;; it only did (defvar rfn-eshadow-overlay) without giving it a global
+;; value, so it was only declared as dynamically-scoped within the
+;; rfn-eshadow.el file.  This is now fixed in Emacs>26.1 but we still need
+;; this defvar here for older releases.
+(defvar rfn-eshadow-overlay)
+
 (defun tramp-rfn-eshadow-update-overlay ()
   "Update `rfn-eshadow-overlay' to cover shadowed part of minibuffer input.
 This is intended to be used as a minibuffer `post-command-hook' for
@@ -1993,26 +1999,25 @@ This is intended to be used as a minibuffer `post-command-hook' for
 been set up by `rfn-eshadow-setup-minibuffer'."
   ;; In remote files name, there is a shadowing just for the local part.
   (ignore-errors
-    (let ((end (or (overlay-end (symbol-value 'rfn-eshadow-overlay))
+    (let ((end (or (overlay-end rfn-eshadow-overlay)
 		   (minibuffer-prompt-end)))
 	  ;; We do not want to send any remote command.
 	  (non-essential t))
       (when
 	  (tramp-tramp-file-p
 	   (buffer-substring-no-properties end (point-max)))
-	(save-excursion
-	  (save-restriction
-	    (narrow-to-region
-	     (1+ (or (string-match
-		      (tramp-rfn-eshadow-update-overlay-regexp)
-		      (buffer-string) end)
-		     end))
-	     (point-max))
-	    (let ((rfn-eshadow-overlay tramp-rfn-eshadow-overlay)
-		  (rfn-eshadow-update-overlay-hook nil)
-		  file-name-handler-alist)
-	      (move-overlay rfn-eshadow-overlay (point-max) (point-max))
-	      (rfn-eshadow-update-overlay))))))))
+	(save-restriction
+	  (narrow-to-region
+	   (1+ (or (string-match
+		    (tramp-rfn-eshadow-update-overlay-regexp)
+		    (buffer-string) end)
+		   end))
+	   (point-max))
+	  (let ((rfn-eshadow-overlay tramp-rfn-eshadow-overlay)
+		(rfn-eshadow-update-overlay-hook nil)
+		file-name-handler-alist)
+	    (move-overlay rfn-eshadow-overlay (point-max) (point-max))
+	    (rfn-eshadow-update-overlay)))))))
 
 (add-hook 'rfn-eshadow-update-overlay-hook
 	  'tramp-rfn-eshadow-update-overlay)
@@ -3567,16 +3572,20 @@ support symbolic links."
     ;; First, we must replace environment variables.
     (setq filename (tramp-replace-environment-variables filename))
     (with-parsed-tramp-file-name filename nil
-      ;; We do not want to replace environment variables, again.
+      ;; We do not want to replace environment variables, again.  "//"
+      ;; has a special meaning at the beginning of a file name on
+      ;; Cygwin and MS-Windows, we must remove it.
       (let (process-environment)
 	;; Ignore in LOCALNAME everything before "//" or "/~".
 	(when (stringp localname)
 	  (if (string-match "//\\(/\\|~\\)" localname)
-	      (setq filename (substitute-in-file-name localname))
+	      (setq filename
+                    (replace-regexp-in-string
+                     "\\`/+" "/" (substitute-in-file-name localname)))
 	    (setq filename
 		  (concat (file-remote-p filename)
-			  (tramp-run-real-handler
-			   'substitute-in-file-name (list localname)))))))
+			  (replace-regexp-in-string
+                           "\\`/+" "/" (substitute-in-file-name localname)))))))
       ;; "/m:h:~" does not work for completion.  We use "/m:h:~/".
       (if (and (stringp localname) (string-equal "~" localname))
 	  (concat filename "/")
@@ -4104,13 +4113,13 @@ This is used to map a mode number to a permission string.")
 (defun tramp-file-mode-from-int (mode)
   "Turn an integer representing a file mode into an ls(1)-like string."
   (let ((type	(cdr
-		 (assoc (logand (lsh mode -12) 15) tramp-file-mode-type-map)))
-	(user	(logand (lsh mode -6) 7))
-	(group	(logand (lsh mode -3) 7))
-	(other	(logand (lsh mode -0) 7))
-	(suid	(> (logand (lsh mode -9) 4) 0))
-	(sgid	(> (logand (lsh mode -9) 2) 0))
-	(sticky	(> (logand (lsh mode -9) 1) 0)))
+		 (assoc (logand (ash mode -12) 15) tramp-file-mode-type-map)))
+	(user	(logand (ash mode -6) 7))
+	(group	(logand (ash mode -3) 7))
+	(other	(logand (ash mode -0) 7))
+	(suid	(> (logand (ash mode -9) 4) 0))
+	(sgid	(> (logand (ash mode -9) 2) 0))
+	(sticky	(> (logand (ash mode -9) 1) 0)))
     (setq user  (tramp-file-mode-permissions user  suid "s"))
     (setq group (tramp-file-mode-permissions group sgid "s"))
     (setq other (tramp-file-mode-permissions other sticky "t"))
@@ -4619,8 +4628,10 @@ Only works for Bourne-like shells."
 (defun tramp-eshell-directory-change ()
   "Set `eshell-path-env' to $PATH of the host related to `default-directory'."
   ;; Remove last element of `(exec-path)', which is `exec-directory'.
+  ;; Use `path-separator' as it does eshell.
   (setq eshell-path-env
-	(mapconcat 'identity (butlast (tramp-compat-exec-path)) ":")))
+	(mapconcat
+	 'identity (butlast (tramp-compat-exec-path)) path-separator)))
 
 (eval-after-load "esh-util"
   '(progn
@@ -4659,8 +4670,6 @@ Only works for Bourne-like shells."
 ;; * Better error checking.  At least whenever we see something
 ;;   strange when doing zerop, we should kill the process and start
 ;;   again.  (Greg Stark)
-;;
-;; * Make shadowfile.el grok Tramp filenames.  (Bug#4526, Bug#4846)
 ;;
 ;; * I was wondering if it would be possible to use tramp even if I'm
 ;;   actually using sshfs.  But when I launch a command I would like

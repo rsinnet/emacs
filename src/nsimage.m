@@ -85,7 +85,7 @@ ns_load_image (struct frame *f, struct image *img,
   eassert (valid_image_p (img->spec));
 
   lisp_index = Fplist_get (XCDR (img->spec), QCindex);
-  index = INTEGERP (lisp_index) ? XFASTINT (lisp_index) : 0;
+  index = FIXNUMP (lisp_index) ? XFIXNAT (lisp_index) : 0;
 
   lisp_rotation = Fplist_get (XCDR (img->spec), QCrotation);
   rotation = NUMBERP (lisp_rotation) ? XFLOATINT (lisp_rotation) : 0;
@@ -113,7 +113,7 @@ ns_load_image (struct frame *f, struct image *img,
   if (![eImg setFrame: index])
     {
       add_to_log ("Unable to set index %d for image %s",
-                  make_number (index), img->spec);
+                  make_fixnum (index), img->spec);
       return 0;
     }
 
@@ -495,7 +495,7 @@ ns_set_alpha (void *img, int x, int y, unsigned char a)
                       floatValue];
 
       if (frames > 1)
-        metadata = Fcons (Qcount, Fcons (make_number (frames), metadata));
+        metadata = Fcons (Qcount, Fcons (make_fixnum (frames), metadata));
       if (delay > 0)
         metadata = Fcons (Qdelay, Fcons (make_float (delay), metadata));
     }

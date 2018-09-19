@@ -179,6 +179,14 @@ Should be consistent with the Git config value i18n.logOutputEncoding."
   :type '(coding-system :tag "Coding system to decode Git log output")
   :version "25.1")
 
+(defcustom vc-git-grep-template "git --no-pager grep -n -e <R> -- <F>"
+  "The default command to run for \\[vc-git-grep].
+The following place holders should be present in the string:
+ <F> - file names and wildcards to search.
+ <R> - the regular expression searched for."
+  :type 'string
+  :version "27.1")
+
 ;; History of Git commands.
 (defvar vc-git-history nil)
 
@@ -301,9 +309,6 @@ in the order given by 'git status'."
                 '("--ignored"))
             "--"))
         (status (apply #'vc-git--run-command-string file args)))
-    ;; Alternatively, the `ignored' state could be detected with 'git
-    ;; ls-files -i -o --exclude-standard', but that's an extra process
-    ;; call, and the `ignored' state is rarely needed.
     (if (null status)
         ;; If status is nil, there was an error calling git, likely because
         ;; the file is not in a git repo.
@@ -370,8 +375,8 @@ in the order given by 'git status'."
 
 (defun vc-git-file-type-as-string (old-perm new-perm)
   "Return a string describing the file type based on its permissions."
-  (let* ((old-type (lsh (or old-perm 0) -9))
-	 (new-type (lsh (or new-perm 0) -9))
+  (let* ((old-type (ash (or old-perm 0) -9))
+	 (new-type (ash (or new-perm 0) -9))
 	 (str (pcase new-type
 		(?\100  ;; File.
 		 (pcase old-type
@@ -568,6 +573,7 @@ or an empty string if none."
 (declare-function vc-set-async-update "vc-dispatcher" (process-buffer))
 
 (defun vc-git-dir-status-goto-stage (git-state)
+  ;; TODO: Look into reimplementing this using `git status --porcelain=v2'.
   (let ((files (vc-git-dir-status-state->files git-state)))
     (erase-buffer)
     (pcase (vc-git-dir-status-state->stage git-state)
@@ -584,7 +590,7 @@ or an empty string if none."
                        "ls-files" "-z" "-c" "-s" "--"))
       (`ls-files-conflict
        (vc-git-command (current-buffer) 'async files
-                       "ls-files" "-z" "-c" "-s" "--"))
+                       "ls-files" "-z" "-u" "--"))
       (`ls-files-unknown
        (vc-git-command (current-buffer) 'async files
                        "ls-files" "-z" "-o" "--directory"
@@ -947,9 +953,6 @@ This prompts for a branch to merge from."
           (vc-git--run-command-string directory "status" "--porcelain" "--"))
          (lines (when status (split-string status "\n" 'omit-nulls)))
          files)
-    ;; TODO: Look into reimplementing `vc-git-state', as well as
-    ;; `vc-git-dir-status-files', based on this output, thus making the
-    ;; extra process call in `vc-git-find-file-hook' unnecessary.
     (dolist (line lines files)
       (when (string-match "\\([ MADRCU?!][ MADRCU?!]\\) \\(.+\\)\\(?: -> \\(.+\\)\\)?"
                           line)
@@ -984,15 +987,10 @@ This prompts for a branch to merge from."
 (defun vc-git-find-file-hook ()
   "Activate `smerge-mode' if there is a conflict."
   (when (and buffer-file-name
-             ;; FIXME
-             ;; 1) the net result is to call git twice per file.
-             ;; 2) v-g-c-f is documented to take a directory.
-             ;; https://lists.gnu.org/r/emacs-devel/2014-01/msg01126.html
-             (vc-git-conflicted-files buffer-file-name)
+             (eq (vc-state buffer-file-name 'Git) 'conflict)
              (save-excursion
                (goto-char (point-min))
                (re-search-forward "^<<<<<<< " nil 'noerror)))
-    (vc-file-setprop buffer-file-name 'vc-state 'conflict)
     (smerge-start-session)
     (when vc-git-resolve-conflicts
       (add-hook 'after-save-hook 'vc-git-resolve-when-done nil 'local))
@@ -1442,8 +1440,7 @@ This command shares argument histories with \\[rgrep] and \\[grep]."
      (cond
       ((equal current-prefix-arg '(16))
        (list (read-from-minibuffer "Run: " "git grep"
-				   nil nil 'grep-history)
-	     nil))
+				   nil nil 'grep-history)))
       (t (let* ((regexp (grep-read-regexp))
 		(files
                  (mapconcat #'shell-quote-argument
@@ -1453,13 +1450,15 @@ This command shares argument histories with \\[rgrep] and \\[grep]."
 	   (list regexp files dir))))))
   (require 'grep)
   (when (and (stringp regexp) (> (length regexp) 0))
+    (unless (and dir (file-accessible-directory-p dir))
+      (setq dir default-directory))
     (let ((command regexp))
       (if (null files)
 	  (if (string= command "git grep")
 	      (setq command nil))
 	(setq dir (file-name-as-directory (expand-file-name dir)))
 	(setq command
-	      (grep-expand-template "git --no-pager grep -n -e <R> -- <F>"
+              (grep-expand-template vc-git-grep-template
                                     regexp files))
 	(when command
 	  (if (equal current-prefix-arg '(4))

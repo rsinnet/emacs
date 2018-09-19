@@ -58,6 +58,7 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 # ifdef WINDOWSNT
 #  include <windows.h>
+#  include "w32common.h"
 #  include "w32.h"
 # endif
 
@@ -816,7 +817,20 @@ gnutls_make_error (int err)
     }
 
   check_memory_full (err);
-  return make_number (err);
+  return make_fixnum (err);
+}
+
+static void
+gnutls_deinit_certificates (struct Lisp_Process *p)
+{
+  if (! p->gnutls_certificates)
+    return;
+
+  for (int i = 0; i < p->gnutls_certificates_length; i++)
+    gnutls_x509_crt_deinit (p->gnutls_certificates[i]);
+
+  xfree (p->gnutls_certificates);
+  p->gnutls_certificates = NULL;
 }
 
 Lisp_Object
@@ -853,6 +867,9 @@ emacs_gnutls_deinit (Lisp_Object proc)
 	GNUTLS_INITSTAGE (proc) = GNUTLS_STAGE_INIT - 1;
     }
 
+  if (XPROCESS (proc)->gnutls_certificates)
+    gnutls_deinit_certificates (XPROCESS (proc));
+
   XPROCESS (proc)->gnutls_p = false;
   return Qt;
 }
@@ -877,7 +894,7 @@ See also `gnutls-boot'.  */)
 {
   CHECK_PROCESS (proc);
 
-  return make_number (GNUTLS_INITSTAGE (proc));
+  return make_fixnum (GNUTLS_INITSTAGE (proc));
 }
 
 DEFUN ("gnutls-errorp", Fgnutls_errorp, Sgnutls_errorp, 1, 1, 0,
@@ -917,10 +934,10 @@ Usage: (gnutls-error-fatalp ERROR)  */)
 	}
     }
 
-  if (! TYPE_RANGED_INTEGERP (int, err))
+  if (! TYPE_RANGED_FIXNUMP (int, err))
     error ("Not an error symbol or code");
 
-  if (0 == gnutls_error_is_fatal (XINT (err)))
+  if (0 == gnutls_error_is_fatal (XFIXNUM (err)))
     return Qnil;
 
   return Qt;
@@ -949,10 +966,10 @@ usage: (gnutls-error-string ERROR)  */)
 	}
     }
 
-  if (! TYPE_RANGED_INTEGERP (int, err))
+  if (! TYPE_RANGED_FIXNUMP (int, err))
     return build_string ("Not an error symbol or code");
 
-  return build_string (emacs_gnutls_strerror (XINT (err)));
+  return build_string (emacs_gnutls_strerror (XFIXNUM (err)));
 }
 
 DEFUN ("gnutls-deinit", Fgnutls_deinit, Sgnutls_deinit, 1, 1, 0,
@@ -996,7 +1013,7 @@ gnutls_certificate_details (gnutls_x509_crt_t cert)
     check_memory_full (version);
     if (version >= GNUTLS_E_SUCCESS)
       res = nconc2 (res, list2 (intern (":version"),
-				make_number (version)));
+				make_fixnum (version)));
   }
 
   /* Serial. */
@@ -1194,9 +1211,17 @@ DEFUN ("gnutls-peer-status-warning-describe", Fgnutls_peer_status_warning_descri
 
 DEFUN ("gnutls-peer-status", Fgnutls_peer_status, Sgnutls_peer_status, 1, 1, 0,
        doc: /* Describe a GnuTLS PROC peer certificate and any warnings about it.
+
 The return value is a property list with top-level keys :warnings and
-:certificate.  The :warnings entry is a list of symbols you can describe with
-`gnutls-peer-status-warning-describe'. */)
+:certificates.
+
+The :warnings entry is a list of symbols you can get a description of
+with `gnutls-peer-status-warning-describe', and :certificates is the
+certificate chain for the connection, with the host certificate
+first, and intermediary certificates (if any) following it.
+
+In addition, for backwards compatibility, the host certificate is also
+returned as the :certificate entry.  */)
   (Lisp_Object proc)
 {
   Lisp_Object warnings = Qnil, result = Qnil;
@@ -1238,9 +1263,9 @@ The return value is a property list with top-level keys :warnings and
 
   /* This could get called in the INIT stage, when the certificate is
      not yet set. */
-  if (XPROCESS (proc)->gnutls_certificate != NULL &&
-      gnutls_x509_crt_check_issuer(XPROCESS (proc)->gnutls_certificate,
-                                   XPROCESS (proc)->gnutls_certificate))
+  if (XPROCESS (proc)->gnutls_certificates != NULL &&
+      gnutls_x509_crt_check_issuer(XPROCESS (proc)->gnutls_certificates[0],
+                                   XPROCESS (proc)->gnutls_certificates[0]))
     warnings = Fcons (intern (":self-signed"), warnings);
 
   if (!NILP (warnings))
@@ -1248,10 +1273,21 @@ The return value is a property list with top-level keys :warnings and
 
   /* This could get called in the INIT stage, when the certificate is
      not yet set. */
-  if (XPROCESS (proc)->gnutls_certificate != NULL)
-    result = nconc2 (result, list2
-                     (intern (":certificate"),
-                      gnutls_certificate_details (XPROCESS (proc)->gnutls_certificate)));
+  if (XPROCESS (proc)->gnutls_certificates != NULL)
+    {
+      Lisp_Object certs = Qnil;
+
+      /* Return all the certificates in a list. */
+      for (int i = 0; i < XPROCESS (proc)->gnutls_certificates_length; i++)
+	certs = nconc2 (certs, list1 (gnutls_certificate_details
+				      (XPROCESS (proc)->gnutls_certificates[i])));
+
+      result = nconc2 (result, list2 (intern (":certificates"), certs));
+
+      /* Return the host certificate in its own element for
+	 compatibility reasons. */
+      result = nconc2 (result, list2 (intern (":certificate"), Fcar (certs)));
+    }
 
   state = XPROCESS (proc)->gnutls_state;
 
@@ -1261,7 +1297,7 @@ The return value is a property list with top-level keys :warnings and
     check_memory_full (bits);
     if (bits > 0)
       result = nconc2 (result, list2 (intern (":diffie-hellman-prime-bits"),
-				      make_number (bits)));
+				      make_fixnum (bits)));
   }
 
   /* Key exchange. */
@@ -1394,7 +1430,7 @@ gnutls_verify_boot (Lisp_Object proc, Lisp_Object proplist)
   if (ret < GNUTLS_E_SUCCESS)
     return gnutls_make_error (ret);
 
-  XPROCESS (proc)->gnutls_peer_verification = peer_verification;
+  p->gnutls_peer_verification = peer_verification;
 
   warnings = Fplist_get (Fgnutls_peer_status (proc), intern (":warnings"));
   if (!NILP (warnings))
@@ -1431,49 +1467,60 @@ gnutls_verify_boot (Lisp_Object proc, Lisp_Object proplist)
      can be easily extended to work with openpgp keys as well.  */
   if (gnutls_certificate_type_get (state) == GNUTLS_CRT_X509)
     {
-      gnutls_x509_crt_t gnutls_verify_cert;
-      const gnutls_datum_t *gnutls_verify_cert_list;
-      unsigned int gnutls_verify_cert_list_size;
+      const gnutls_datum_t *cert_list;
+      unsigned int cert_list_length;
+      int failed_import = 0;
 
-      ret = gnutls_x509_crt_init (&gnutls_verify_cert);
-      if (ret < GNUTLS_E_SUCCESS)
-	return gnutls_make_error (ret);
+      cert_list = gnutls_certificate_get_peers (state, &cert_list_length);
 
-      gnutls_verify_cert_list
-	= gnutls_certificate_get_peers (state, &gnutls_verify_cert_list_size);
-
-      if (gnutls_verify_cert_list == NULL)
+      if (cert_list == NULL)
 	{
-	  gnutls_x509_crt_deinit (gnutls_verify_cert);
 	  emacs_gnutls_deinit (proc);
 	  boot_error (p, "No x509 certificate was found\n");
 	  return Qnil;
 	}
 
-      /* Check only the first certificate in the given chain.  */
-      ret = gnutls_x509_crt_import (gnutls_verify_cert,
-				    &gnutls_verify_cert_list[0],
-				    GNUTLS_X509_FMT_DER);
+      /* Check only the first certificate in the given chain, but
+	 store them all.  */
+      p->gnutls_certificates =
+	xmalloc (cert_list_length * sizeof (gnutls_x509_crt_t));
+      p->gnutls_certificates_length = cert_list_length;
 
-      if (ret < GNUTLS_E_SUCCESS)
+      for (int i = cert_list_length - 1; i >= 0; i--)
 	{
-	  gnutls_x509_crt_deinit (gnutls_verify_cert);
-	  return gnutls_make_error (ret);
+	  gnutls_x509_crt_t cert;
+
+	  gnutls_x509_crt_init (&cert);
+
+	  if (ret < GNUTLS_E_SUCCESS)
+	    failed_import = ret;
+	  else
+	    {
+	      ret = gnutls_x509_crt_import (cert, &cert_list[i],
+					    GNUTLS_X509_FMT_DER);
+
+	      if (ret < GNUTLS_E_SUCCESS)
+		failed_import = ret;
+	    }
+
+	  p->gnutls_certificates[i] = cert;
 	}
 
-      XPROCESS (proc)->gnutls_certificate = gnutls_verify_cert;
+      if (failed_import != 0)
+	{
+	  gnutls_deinit_certificates (p);
+	  return gnutls_make_error (failed_import);
+	}
 
-      int err = gnutls_x509_crt_check_hostname (gnutls_verify_cert,
+      int err = gnutls_x509_crt_check_hostname (p->gnutls_certificates[0],
 						c_hostname);
       check_memory_full (err);
       if (!err)
 	{
-	  XPROCESS (proc)->gnutls_extra_peer_verification
-	    |= CERTIFICATE_NOT_MATCHING;
+	  p->gnutls_extra_peer_verification |= CERTIFICATE_NOT_MATCHING;
           if (verify_error_all
               || !NILP (Fmember (QChostname, verify_error)))
             {
-	      gnutls_x509_crt_deinit (gnutls_verify_cert);
 	      emacs_gnutls_deinit (proc);
 	      boot_error (p, "The x509 certificate does not match \"%s\"",
 			  c_hostname);
@@ -1486,7 +1533,7 @@ gnutls_verify_boot (Lisp_Object proc, Lisp_Object proplist)
     }
 
   /* Set this flag only if the whole initialization succeeded.  */
-  XPROCESS (proc)->gnutls_p = true;
+  p->gnutls_p = true;
 
   return gnutls_make_error (ret);
 }
@@ -1604,14 +1651,14 @@ one trustfile (usually a CA bundle).  */)
 
   state = XPROCESS (proc)->gnutls_state;
 
-  if (TYPE_RANGED_INTEGERP (int, loglevel))
+  if (TYPE_RANGED_FIXNUMP (int, loglevel))
     {
       gnutls_global_set_log_function (gnutls_log_function);
 # ifdef HAVE_GNUTLS3
       gnutls_global_set_audit_log_function (gnutls_audit_log_function);
 # endif
-      gnutls_global_set_log_level (XINT (loglevel));
-      max_log_level = XINT (loglevel);
+      gnutls_global_set_log_level (XFIXNUM (loglevel));
+      max_log_level = XFIXNUM (loglevel);
       XPROCESS (proc)->gnutls_log_level = max_log_level;
     }
 
@@ -1644,9 +1691,9 @@ one trustfile (usually a CA bundle).  */)
       XPROCESS (proc)->gnutls_x509_cred = x509_cred;
 
       verify_flags = Fplist_get (proplist, QCverify_flags);
-      if (TYPE_RANGED_INTEGERP (unsigned int, verify_flags))
+      if (TYPE_RANGED_FIXNUMP (unsigned int, verify_flags))
 	{
-	  gnutls_verify_flags = XFASTINT (verify_flags);
+	  gnutls_verify_flags = XFIXNAT (verify_flags);
 	  GNUTLS_LOG (2, max_log_level, "setting verification flags");
 	}
       else if (NILP (verify_flags))
@@ -1805,8 +1852,8 @@ one trustfile (usually a CA bundle).  */)
 
   GNUTLS_INITSTAGE (proc) = GNUTLS_STAGE_PRIORITY;
 
-  if (INTEGERP (prime_bits))
-    gnutls_dh_set_prime_bits (state, XUINT (prime_bits));
+  if (FIXNUMP (prime_bits))
+    gnutls_dh_set_prime_bits (state, XUFIXNUM (prime_bits));
 
   ret = EQ (type, Qgnutls_x509pki)
     ? gnutls_credentials_set (state, GNUTLS_CRD_CERTIFICATE, x509_cred)
@@ -1855,7 +1902,8 @@ This function may also return `gnutls-e-again', or
 
   state = XPROCESS (proc)->gnutls_state;
 
-  gnutls_x509_crt_deinit (XPROCESS (proc)->gnutls_certificate);
+  if (XPROCESS (proc)->gnutls_certificates)
+    gnutls_deinit_certificates (XPROCESS (proc));
 
   ret = gnutls_bye (state, NILP (cont) ? GNUTLS_SHUT_RDWR : GNUTLS_SHUT_WR);
 
@@ -1890,19 +1938,19 @@ The alist key is the cipher name. */)
 
       Lisp_Object cp
 	= listn (CONSTYPE_HEAP, 15, cipher_symbol,
-		 QCcipher_id, make_number (gca),
+		 QCcipher_id, make_fixnum (gca),
 		 QCtype, Qgnutls_type_cipher,
 		 QCcipher_aead_capable, cipher_tag_size == 0 ? Qnil : Qt,
-		 QCcipher_tagsize, make_number (cipher_tag_size),
+		 QCcipher_tagsize, make_fixnum (cipher_tag_size),
 
 		 QCcipher_blocksize,
-		 make_number (gnutls_cipher_get_block_size (gca)),
+		 make_fixnum (gnutls_cipher_get_block_size (gca)),
 
 		 QCcipher_keysize,
-		 make_number (gnutls_cipher_get_key_size (gca)),
+		 make_fixnum (gnutls_cipher_get_key_size (gca)),
 
 		 QCcipher_ivsize,
-		 make_number (gnutls_cipher_get_iv_size (gca)));
+		 make_fixnum (gnutls_cipher_get_iv_size (gca)));
 
       ciphers = Fcons (cp, ciphers);
     }
@@ -2024,22 +2072,30 @@ gnutls_symmetric (bool encrypting, Lisp_Object cipher,
     cipher = intern (SSDATA (cipher));
 
   if (SYMBOLP (cipher))
-    info = XCDR (Fassq (cipher, Fgnutls_ciphers ()));
-  else if (TYPE_RANGED_INTEGERP (gnutls_cipher_algorithm_t, cipher))
-    gca = XINT (cipher);
+    {
+      info = Fassq (cipher, Fgnutls_ciphers ());
+      if (!CONSP (info))
+	xsignal2 (Qerror,
+		  build_string ("GnuTLS cipher is invalid or not found"),
+		  cipher);
+      info = XCDR (info);
+    }
+  else if (TYPE_RANGED_FIXNUMP (gnutls_cipher_algorithm_t, cipher))
+    gca = XFIXNUM (cipher);
   else
     info = cipher;
 
   if (!NILP (info) && CONSP (info))
     {
       Lisp_Object v = Fplist_get (info, QCcipher_id);
-      if (TYPE_RANGED_INTEGERP (gnutls_cipher_algorithm_t, v))
-        gca = XINT (v);
+      if (TYPE_RANGED_FIXNUMP (gnutls_cipher_algorithm_t, v))
+        gca = XFIXNUM (v);
     }
 
   ptrdiff_t key_size = gnutls_cipher_get_key_size (gca);
   if (key_size == 0)
-    error ("GnuTLS cipher is invalid or not found");
+    xsignal2 (Qerror,
+	      build_string ("GnuTLS cipher is invalid or not found"), cipher);
 
   ptrdiff_t kstart_byte, kend_byte;
   const char *kdata = extract_data_from_object (key, &kstart_byte, &kend_byte);
@@ -2213,17 +2269,17 @@ name. */)
       nonce_size = gnutls_mac_get_nonce_size (gma);
 #endif
       Lisp_Object mp = listn (CONSTYPE_HEAP, 11, gma_symbol,
-			      QCmac_algorithm_id, make_number (gma),
+			      QCmac_algorithm_id, make_fixnum (gma),
 			      QCtype, Qgnutls_type_mac_algorithm,
 
                               QCmac_algorithm_length,
-                              make_number (gnutls_hmac_get_len (gma)),
+                              make_fixnum (gnutls_hmac_get_len (gma)),
 
                               QCmac_algorithm_keysize,
-                              make_number (gnutls_mac_get_key_size (gma)),
+                              make_fixnum (gnutls_mac_get_key_size (gma)),
 
                               QCmac_algorithm_noncesize,
-			      make_number (nonce_size));
+			      make_fixnum (nonce_size));
       mac_algorithms = Fcons (mp, mac_algorithms);
     }
 
@@ -2248,11 +2304,11 @@ method name. */)
       Lisp_Object gda_symbol = intern (gnutls_digest_get_name (gda));
 
       Lisp_Object mp = listn (CONSTYPE_HEAP, 7, gda_symbol,
-			      QCdigest_algorithm_id, make_number (gda),
+			      QCdigest_algorithm_id, make_fixnum (gda),
 			      QCtype, Qgnutls_type_digest_algorithm,
 
                               QCdigest_algorithm_length,
-                              make_number (gnutls_hash_get_len (gda)));
+                              make_fixnum (gnutls_hash_get_len (gda)));
 
       digest_algorithms = Fcons (mp, digest_algorithms);
     }
@@ -2295,22 +2351,31 @@ itself. */)
     hash_method = intern (SSDATA (hash_method));
 
   if (SYMBOLP (hash_method))
-    info = XCDR (Fassq (hash_method, Fgnutls_macs ()));
-  else if (TYPE_RANGED_INTEGERP (gnutls_mac_algorithm_t, hash_method))
-    gma = XINT (hash_method);
+    {
+      info = Fassq (hash_method, Fgnutls_macs ());
+      if (!CONSP (info))
+	xsignal2 (Qerror,
+		  build_string ("GnuTLS MAC-method is invalid or not found"),
+		  hash_method);
+      info = XCDR (info);
+    }
+  else if (TYPE_RANGED_FIXNUMP (gnutls_mac_algorithm_t, hash_method))
+    gma = XFIXNUM (hash_method);
   else
     info = hash_method;
 
   if (!NILP (info) && CONSP (info))
     {
       Lisp_Object v = Fplist_get (info, QCmac_algorithm_id);
-      if (TYPE_RANGED_INTEGERP (gnutls_mac_algorithm_t, v))
-        gma = XINT (v);
+      if (TYPE_RANGED_FIXNUMP (gnutls_mac_algorithm_t, v))
+        gma = XFIXNUM (v);
     }
 
   ptrdiff_t digest_length = gnutls_hmac_get_len (gma);
   if (digest_length == 0)
-    error ("GnuTLS MAC-method is invalid or not found");
+    xsignal2 (Qerror,
+	      build_string ("GnuTLS MAC-method is invalid or not found"),
+	      hash_method);
 
   ptrdiff_t kstart_byte, kend_byte;
   const char *kdata = extract_data_from_object (key, &kstart_byte, &kend_byte);
@@ -2376,22 +2441,31 @@ the number itself. */)
     digest_method = intern (SSDATA (digest_method));
 
   if (SYMBOLP (digest_method))
-    info = XCDR (Fassq (digest_method, Fgnutls_digests ()));
-  else if (TYPE_RANGED_INTEGERP (gnutls_digest_algorithm_t, digest_method))
-    gda = XINT (digest_method);
+    {
+      info = Fassq (digest_method, Fgnutls_digests ());
+      if (!CONSP (info))
+	xsignal2 (Qerror,
+		  build_string ("GnuTLS digest-method is invalid or not found"),
+		  digest_method);
+      info = XCDR (info);
+    }
+  else if (TYPE_RANGED_FIXNUMP (gnutls_digest_algorithm_t, digest_method))
+    gda = XFIXNUM (digest_method);
   else
     info = digest_method;
 
   if (!NILP (info) && CONSP (info))
     {
       Lisp_Object v = Fplist_get (info, QCdigest_algorithm_id);
-      if (TYPE_RANGED_INTEGERP (gnutls_digest_algorithm_t, v))
-        gda = XINT (v);
+      if (TYPE_RANGED_FIXNUMP (gnutls_digest_algorithm_t, v))
+        gda = XFIXNUM (v);
     }
 
   ptrdiff_t digest_length = gnutls_hash_get_len (gda);
   if (digest_length == 0)
-    error ("GnuTLS digest-method is invalid or not found");
+    xsignal2 (Qerror,
+	      build_string ("GnuTLS digest-method is invalid or not found"),
+	      digest_method);
 
   gnutls_hash_hd_t hash;
   int ret = gnutls_hash_init (&hash, gda);
@@ -2498,11 +2572,11 @@ syms_of_gnutls (void)
   DEFSYM (Qlibgnutls_version, "libgnutls-version");
   Fset (Qlibgnutls_version,
 #ifdef HAVE_GNUTLS
-	make_number (GNUTLS_VERSION_MAJOR * 10000
+	make_fixnum (GNUTLS_VERSION_MAJOR * 10000
 		     + GNUTLS_VERSION_MINOR * 100
 		     + GNUTLS_VERSION_PATCH)
 #else
-	make_number (-1)
+	make_fixnum (-1)
 #endif
         );
 #ifdef HAVE_GNUTLS
@@ -2546,19 +2620,19 @@ syms_of_gnutls (void)
 
   DEFSYM (Qgnutls_e_interrupted, "gnutls-e-interrupted");
   Fput (Qgnutls_e_interrupted, Qgnutls_code,
-	make_number (GNUTLS_E_INTERRUPTED));
+	make_fixnum (GNUTLS_E_INTERRUPTED));
 
   DEFSYM (Qgnutls_e_again, "gnutls-e-again");
   Fput (Qgnutls_e_again, Qgnutls_code,
-	make_number (GNUTLS_E_AGAIN));
+	make_fixnum (GNUTLS_E_AGAIN));
 
   DEFSYM (Qgnutls_e_invalid_session, "gnutls-e-invalid-session");
   Fput (Qgnutls_e_invalid_session, Qgnutls_code,
-	make_number (GNUTLS_E_INVALID_SESSION));
+	make_fixnum (GNUTLS_E_INVALID_SESSION));
 
   DEFSYM (Qgnutls_e_not_ready_for_handshake, "gnutls-e-not-ready-for-handshake");
   Fput (Qgnutls_e_not_ready_for_handshake, Qgnutls_code,
-	make_number (GNUTLS_E_APPLICATION_ERROR_MIN));
+	make_fixnum (GNUTLS_E_APPLICATION_ERROR_MIN));
 
   defsubr (&Sgnutls_get_initstage);
   defsubr (&Sgnutls_asynchronous_parameters);

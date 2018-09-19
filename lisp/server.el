@@ -777,9 +777,6 @@ by the current Emacs process, use the `server-process' variable."
 ;;;###autoload
 (define-minor-mode server-mode
   "Toggle Server mode.
-With a prefix argument ARG, enable Server mode if ARG is
-positive, and disable it otherwise.  If called from Lisp, enable
-Server mode if ARG is omitted or nil.
 
 Server mode runs a process that accepts commands from the
 `emacsclient' program.  See Info node `Emacs server' and
@@ -1300,7 +1297,7 @@ The following commands are accepted by the client:
 
             (server-execute-continuation proc))))
     ;; condition-case
-    (error (server-return-error proc err))))
+    (t (server-return-error proc err))))
 
 (defun server-execute (proc files nowait commands dontkill create-frame-func tty-name)
   ;; This is run from timers and process-filters, i.e. "asynchronously".
@@ -1673,13 +1670,15 @@ only these files will be asked to be saved."
 	     (save-buffers-kill-emacs arg)))
 	  ((processp proc)
 	   (let ((buffers (process-get proc 'buffers)))
-	     ;; If client is bufferless, emulate a normal Emacs exit
-	     ;; and offer to save all buffers.  Otherwise, offer to
-	     ;; save only the buffers belonging to the client.
 	     (save-some-buffers
 	      arg (if buffers
+                      ;; Only files from emacsclient file list.
 		      (lambda () (memq (current-buffer) buffers))
-		    t))
+                    ;; No emacsclient file list: don't override
+                    ;; `save-some-buffers-default-predicate' (unless
+                    ;; ARG is non-nil), since we're not killing
+                    ;; Emacs (unlike `save-buffers-kill-emacs').
+		    (and arg t)))
 	     (server-delete-client proc)))
 	  (t (error "Invalid client frame")))))
 

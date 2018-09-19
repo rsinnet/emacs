@@ -194,7 +194,8 @@ struct Lisp_Process
     gnutls_session_t gnutls_state;
     gnutls_certificate_client_credentials gnutls_x509_cred;
     gnutls_anon_client_credentials_t gnutls_anon_cred;
-    gnutls_x509_crt_t gnutls_certificate;
+    gnutls_x509_crt_t *gnutls_certificates;
+    int gnutls_certificates_length;
     unsigned int gnutls_peer_verification;
     unsigned int gnutls_extra_peer_verification;
     int gnutls_log_level;
@@ -202,7 +203,7 @@ struct Lisp_Process
     bool_bf gnutls_p : 1;
     bool_bf gnutls_complete_negotiation_p : 1;
 #endif
-};
+  } GCALIGNED_STRUCT;
 
 INLINE bool
 PROCESSP (Lisp_Object a)

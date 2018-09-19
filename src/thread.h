@@ -19,7 +19,7 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #ifndef THREAD_H
 #define THREAD_H
 
-#include "regex.h"
+#include "regex-emacs.h"
 
 #ifdef WINDOWSNT
 #include <sys/socket.h>
@@ -30,7 +30,6 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #endif
 
 #include "sysselect.h"		/* FIXME */
-#include "systime.h"		/* FIXME */
 #include "systhread.h"
 
 struct thread_state
@@ -51,6 +50,9 @@ struct thread_state
 
   /* The thread's function.  */
   Lisp_Object function;
+
+  /* The thread's result, if function has finished.  */
+  Lisp_Object result;
 
   /* If non-nil, this thread has been signaled.  */
   Lisp_Object error_symbol;
@@ -109,8 +111,8 @@ struct thread_state
   struct buffer *m_current_buffer;
 #define current_buffer (current_thread->m_current_buffer)
 
-  /* Every call to re_match, etc., must pass &search_regs as the regs
-     argument unless you can show it is unnecessary (i.e., if re_match
+  /* Every call to re_match_2, etc., must pass &search_regs as the regs
+     argument unless you can show it is unnecessary (i.e., if re_match_2
      is certainly going to be called again before region-around-match
      can be called).
 
@@ -181,7 +183,7 @@ struct thread_state
 
   /* Threads are kept on a linked list.  */
   struct thread_state *next_thread;
-};
+} GCALIGNED_STRUCT;
 
 INLINE bool
 THREADP (Lisp_Object a)
@@ -228,7 +230,7 @@ struct Lisp_Mutex
 
   /* The lower-level mutex object.  */
   lisp_mutex_t mutex;
-};
+} GCALIGNED_STRUCT;
 
 INLINE bool
 MUTEXP (Lisp_Object a)
@@ -262,7 +264,7 @@ struct Lisp_CondVar
 
   /* The lower-level condition variable object.  */
   sys_cond_t cond;
-};
+} GCALIGNED_STRUCT;
 
 INLINE bool
 CONDVARP (Lisp_Object a)

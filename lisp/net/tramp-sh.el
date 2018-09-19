@@ -544,7 +544,7 @@ The PATH environment variable should be set via `tramp-remote-path'.
 The TERM environment variable should be set via `tramp-terminal-type'.
 
 The INSIDE_EMACS environment variable will automatically be set
-based on the TRAMP and Emacs versions, and should not be set here."
+based on the Tramp and Emacs versions, and should not be set here."
   :group 'tramp
   :version "26.1"
   :type '(repeat string))
@@ -694,7 +694,7 @@ else
 $uid = ($ARGV[1] eq \"integer\") ? $stat[4] : \"\\\"\" . getpwuid($stat[4]) . \"\\\"\";
 $gid = ($ARGV[1] eq \"integer\") ? $stat[5] : \"\\\"\" . getgrgid($stat[5]) . \"\\\"\";
 printf(
-    \"(%%s %%u %%s %%s (%%u %%u) (%%u %%u) (%%u %%u) %%u.0 %%u t (%%u . %%u) -1)\\n\",
+    \"(%%s %%u %%s %%s (%%u %%u) (%%u %%u) (%%u %%u) %%u %%u t %%u -1)\\n\",
     $type,
     $stat[3],
     $uid,
@@ -707,8 +707,7 @@ printf(
     $stat[10] & 0xffff,
     $stat[7],
     $stat[2],
-    $stat[1] >> 16 & 0xffff,
-    $stat[1] & 0xffff
+    $stat[1]
 );' \"$1\" \"$2\" 2>/dev/null"
   "Perl script to produce output suitable for use with `file-attributes'
 on the remote file system.
@@ -1393,7 +1392,7 @@ component is used as the target of the symlink."
      ;; `tramp-stat-marker', in order to make a proper shell escape of
      ;; them in file names.
      "( (%s %s || %s -h %s) && (%s -c "
-     "'((%s%%N%s) %%h %s %s %%Xe0 %%Ye0 %%Ze0 %%se0 %s%%A%s t %%ie0 -1)' "
+     "'((%s%%N%s) %%h %s %s %%X %%Y %%Z %%s %s%%A%s t %%i -1)' "
      "%s | sed -e 's/\"/\\\\\"/g' -e 's/%s/\"/g') || echo nil)")
     (tramp-get-file-exists-command vec)
     (tramp-shell-quote-argument localname)
@@ -1402,9 +1401,9 @@ component is used as the target of the symlink."
     (tramp-get-remote-stat vec)
     tramp-stat-marker tramp-stat-marker
     (if (eq id-format 'integer)
-	"%ue0" (concat tramp-stat-marker "%U" tramp-stat-marker))
+	"%u" (concat tramp-stat-marker "%U" tramp-stat-marker))
     (if (eq id-format 'integer)
-	"%ge0" (concat tramp-stat-marker "%G" tramp-stat-marker))
+	"%g" (concat tramp-stat-marker "%G" tramp-stat-marker))
     tramp-stat-marker tramp-stat-marker
     (tramp-shell-quote-argument localname)
     tramp-stat-quoted-marker)))
@@ -1825,7 +1824,7 @@ be non-negative integers."
      ;; make a proper shell escape of them in file names.
      "cd %s && echo \"(\"; (%s %s -a | "
      "xargs %s -c "
-     "'(%s%%n%s (%s%%N%s) %%h %s %s %%Xe0 %%Ye0 %%Ze0 %%se0 %s%%A%s t %%ie0 -1)' "
+     "'(%s%%n%s (%s%%N%s) %%h %s %s %%X %%Y %%Z %%s %s%%A%s t %%i -1)' "
      "-- 2>/dev/null | sed -e 's/\"/\\\\\"/g' -e 's/%s/\"/g'); echo \")\"")
     (tramp-shell-quote-argument localname)
     (tramp-get-ls-command vec)
@@ -1836,9 +1835,9 @@ be non-negative integers."
     tramp-stat-marker tramp-stat-marker
     tramp-stat-marker tramp-stat-marker
     (if (eq id-format 'integer)
-	"%ue0" (concat tramp-stat-marker "%U" tramp-stat-marker))
+	"%u" (concat tramp-stat-marker "%U" tramp-stat-marker))
     (if (eq id-format 'integer)
-	"%ge0" (concat tramp-stat-marker "%G" tramp-stat-marker))
+	"%g" (concat tramp-stat-marker "%G" tramp-stat-marker))
     tramp-stat-marker tramp-stat-marker
     tramp-stat-quoted-marker)))
 
@@ -2037,7 +2036,9 @@ file names."
   (unless (memq op '(copy rename))
     (error "Unknown operation `%s', must be `copy' or `rename'" op))
 
-  (if (file-directory-p filename)
+  (if (and
+       (file-directory-p filename)
+       (not (tramp-equal-remote filename newname)))
       (progn
 	(copy-directory filename newname keep-date t)
 	(when (eq op 'rename) (delete-directory filename 'recursive)))
@@ -2200,6 +2201,8 @@ the uid and gid from FILENAME."
 	     (localname2 (if t2 (file-remote-p newname 'localname) newname))
 	     (prefix (file-remote-p (if t1 filename newname)))
              cmd-result)
+	(when (and (eq op 'copy) (file-directory-p filename))
+	  (setq cmd (concat cmd " -R")))
 
 	(cond
 	 ;; Both files are on a remote host, with same user.
@@ -2543,7 +2546,11 @@ The method used must be an out-of-band method."
   "Like `make-directory' for Tramp files."
   (setq dir (expand-file-name dir))
   (with-parsed-tramp-file-name dir nil
-    (tramp-flush-directory-properties v (file-name-directory localname))
+    ;; When PARENTS is non-nil, DIR could be a chain of non-existent
+    ;; directories a/b/c/...  Instead of checking, we simply flush the
+    ;; whole cache.
+    (tramp-flush-directory-properties
+     v (if parents "/" (file-name-directory localname)))
     (save-excursion
       (tramp-barf-unless-okay
        v (format "%s %s"
@@ -3798,12 +3805,12 @@ file-notify events."
 		 (concat "[[:space:]]*\\([[:digit:]]+\\)"
 			 "[[:space:]]+\\([[:digit:]]+\\)"
 			 "[[:space:]]+\\([[:digit:]]+\\)"))
-	    (list (string-to-number (concat (match-string 1) "e0"))
+	    (list (string-to-number (match-string 1))
 		  ;; The second value is the used size.  We need the
 		  ;; free size.
-		  (- (string-to-number (concat (match-string 1) "e0"))
-		     (string-to-number (concat (match-string 2) "e0")))
-		  (string-to-number (concat (match-string 3) "e0")))))))))
+		  (- (string-to-number (match-string 1))
+		     (string-to-number (match-string 2)))
+		  (string-to-number (match-string 3)))))))))
 
 ;;; Internal Functions:
 
@@ -5109,19 +5116,13 @@ Return ATTR."
       (setcar (nthcdr 3 attr) (round (nth 3 attr))))
     ;; Convert last access time.
     (unless (listp (nth 4 attr))
-      (setcar (nthcdr 4 attr)
-              (list (floor (nth 4 attr) 65536)
-                    (floor (mod (nth 4 attr) 65536)))))
+      (setcar (nthcdr 4 attr) (seconds-to-time (nth 4 attr))))
     ;; Convert last modification time.
     (unless (listp (nth 5 attr))
-      (setcar (nthcdr 5 attr)
-              (list (floor (nth 5 attr) 65536)
-                    (floor (mod (nth 5 attr) 65536)))))
+      (setcar (nthcdr 5 attr) (seconds-to-time (nth 5 attr))))
     ;; Convert last status change time.
     (unless (listp (nth 6 attr))
-      (setcar (nthcdr 6 attr)
-              (list (floor (nth 6 attr) 65536)
-                    (floor (mod (nth 6 attr) 65536)))))
+      (setcar (nthcdr 6 attr) (seconds-to-time (nth 6 attr))))
     ;; Convert file size.
     (when (< (nth 7 attr) 0)
       (setcar (nthcdr 7 attr) -1))
@@ -5152,7 +5153,7 @@ Return ATTR."
                     (nth 3 attr)
                     (tramp-get-remote-gid vec 'string)))))
     ;; Convert inode.
-    (unless (listp (nth 10 attr))
+    (when (floatp (nth 10 attr))
       (setcar (nthcdr 10 attr)
               (condition-case nil
                   (let ((high (nth 10 attr))

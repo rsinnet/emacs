@@ -204,6 +204,10 @@ bool
 backtrace_p (union specbinding *pdl)
 { return pdl >= specpdl; }
 
+static bool
+backtrace_thread_p (struct thread_state *tstate, union specbinding *pdl)
+{ return pdl >= tstate->m_specpdl; }
+
 union specbinding *
 backtrace_top (void)
 {
@@ -213,11 +217,29 @@ backtrace_top (void)
   return pdl;
 }
 
+static union specbinding *
+backtrace_thread_top (struct thread_state *tstate)
+{
+  union specbinding *pdl = tstate->m_specpdl_ptr - 1;
+  while (backtrace_thread_p (tstate, pdl) && pdl->kind != SPECPDL_BACKTRACE)
+    pdl--;
+  return pdl;
+}
+
 union specbinding *
 backtrace_next (union specbinding *pdl)
 {
   pdl--;
   while (backtrace_p (pdl) && pdl->kind != SPECPDL_BACKTRACE)
+    pdl--;
+  return pdl;
+}
+
+static union specbinding *
+backtrace_thread_next (struct thread_state *tstate, union specbinding *pdl)
+{
+  pdl--;
+  while (backtrace_thread_p (tstate, pdl) && pdl->kind != SPECPDL_BACKTRACE)
     pdl--;
   return pdl;
 }
@@ -264,8 +286,8 @@ init_eval (void)
 static void
 restore_stack_limits (Lisp_Object data)
 {
-  max_specpdl_size = XINT (XCAR (data));
-  max_lisp_eval_depth = XINT (XCDR (data));
+  max_specpdl_size = XFIXNUM (XCAR (data));
+  max_lisp_eval_depth = XFIXNUM (XCDR (data));
 }
 
 static void grow_specpdl (void);
@@ -282,8 +304,12 @@ call_debugger (Lisp_Object arg)
   /* Do not allow max_specpdl_size less than actual depth (Bug#16603).  */
   EMACS_INT old_max = max (max_specpdl_size, count);
 
-  if (lisp_eval_depth + 40 > max_lisp_eval_depth)
-    max_lisp_eval_depth = lisp_eval_depth + 40;
+  /* The previous value of 40 is too small now that the debugger
+     prints using cl-prin1 instead of prin1.  Printing lists nested 8
+     deep (which is the value of print-level used in the debugger)
+     currently requires 77 additional frames.  See bug#31919.  */
+  if (lisp_eval_depth + 100 > max_lisp_eval_depth)
+    max_lisp_eval_depth = lisp_eval_depth + 100;
 
   /* While debugging Bug#16603, previous value of 100 was found
      too small to avoid specpdl overflow in the debugger itself.  */
@@ -299,8 +325,8 @@ call_debugger (Lisp_Object arg)
 
   /* Restore limits after leaving the debugger.  */
   record_unwind_protect (restore_stack_limits,
-			 Fcons (make_number (old_max),
-				make_number (old_depth)));
+			 Fcons (make_fixnum (old_max),
+				make_fixnum (old_depth)));
 
 #ifdef HAVE_WINDOW_SYSTEM
   if (display_hourglass_p)
@@ -507,7 +533,7 @@ usage: (setq [SYM VAL]...)  */)
       Lisp_Object sym = XCAR (tail), lex_binding;
       tail = XCDR (tail);
       if (!CONSP (tail))
-	xsignal2 (Qwrong_number_of_arguments, Qsetq, make_number (nargs + 1));
+	xsignal2 (Qwrong_number_of_arguments, Qsetq, make_fixnum (nargs + 1));
       Lisp_Object arg = XCAR (tail);
       tail = XCDR (tail);
       val = eval_sub (arg);
@@ -783,7 +809,7 @@ usage: (defvar SYMBOL &optional INITVALUE DOCSTRING)  */)
       LOADHIST_ATTACH (sym);
     }
   else if (!NILP (Vinternal_interpreter_environment)
-	   && !XSYMBOL (sym)->u.s.declared_special)
+	   && (SYMBOLP (sym) && !XSYMBOL (sym)->u.s.declared_special))
     /* A simple (defvar foo) with lexical scoping does "nothing" except
        declare that var to be dynamically scoped *locally* (i.e. within
        the current file or let-block).  */
@@ -934,7 +960,7 @@ usage: (let VARLIST BODY...)  */)
   CHECK_LIST (varlist);
 
   /* Make space to hold the values to give the bound variables.  */
-  EMACS_INT varlist_len = XFASTINT (Flength (varlist));
+  EMACS_INT varlist_len = XFIXNAT (Flength (varlist));
   SAFE_ALLOCA_LISP (temps, varlist_len);
   ptrdiff_t nvars = varlist_len;
 
@@ -981,8 +1007,7 @@ usage: (let VARLIST BODY...)  */)
     specbind (Qinternal_interpreter_environment, lexenv);
 
   elt = Fprogn (XCDR (args));
-  SAFE_FREE ();
-  return unbind_to (count, elt);
+  return SAFE_FREE_UNBIND_TO (count, elt);
 }
 
 DEFUN ("while", Fwhile, Swhile, 1, UNEVALLED, 0,
@@ -1212,9 +1237,11 @@ Executes BODYFORM and returns its value if no error happens.
 Each element of HANDLERS looks like (CONDITION-NAME BODY...)
 where the BODY is made of Lisp expressions.
 
-A handler is applicable to an error
-if CONDITION-NAME is one of the error's condition names.
-If an error happens, the first applicable handler is run.
+A handler is applicable to an error if CONDITION-NAME is one of the
+error's condition names.  Handlers may also apply when non-error
+symbols are signaled (e.g., `quit').  A CONDITION-NAME of t applies to
+any symbol, including non-error symbols.  If multiple handlers are
+applicable, only the first one runs.
 
 The car of a handler may be a list of condition names instead of a
 single condition name; then it handles all of them.  If the special
@@ -1729,31 +1756,23 @@ xsignal3 (Lisp_Object error_symbol, Lisp_Object arg1, Lisp_Object arg2, Lisp_Obj
 }
 
 /* Signal `error' with message S, and additional arg ARG.
-   If ARG is not a genuine list, make it a one-element list.  */
+   If ARG is not a proper list, make it a one-element list.  */
 
 void
 signal_error (const char *s, Lisp_Object arg)
 {
-  Lisp_Object tortoise, hare;
-
-  hare = tortoise = arg;
-  while (CONSP (hare))
-    {
-      hare = XCDR (hare);
-      if (!CONSP (hare))
-	break;
-
-      hare = XCDR (hare);
-      tortoise = XCDR (tortoise);
-
-      if (EQ (hare, tortoise))
-	break;
-    }
-
-  if (!NILP (hare))
+  if (NILP (Fproper_list_p (arg)))
     arg = list1 (arg);
 
   xsignal (Qerror, Fcons (build_string (s), arg));
+}
+
+/* Use this for arithmetic overflow, e.g., when an integer result is
+   too large even for a bignum.  */
+void
+overflow_error (void)
+{
+  xsignal0 (Qoverflow_error);
 }
 
 
@@ -1867,7 +1886,9 @@ find_handler_clause (Lisp_Object handlers, Lisp_Object conditions)
   for (h = handlers; CONSP (h); h = XCDR (h))
     {
       Lisp_Object handler = XCAR (h);
-      if (!NILP (Fmemq (handler, conditions)))
+      if (!NILP (Fmemq (handler, conditions))
+          /* t is also used as a catch-all by Lisp code.  */
+          || EQ (handler, Qt))
 	return handlers;
     }
 
@@ -2004,12 +2025,12 @@ this does nothing and returns nil.  */)
       && !AUTOLOADP (XSYMBOL (function)->u.s.function))
     return Qnil;
 
-  if (!NILP (Vpurify_flag) && EQ (docstring, make_number (0)))
+  if (!NILP (Vpurify_flag) && EQ (docstring, make_fixnum (0)))
     /* `read1' in lread.c has found the docstring starting with "\
        and assumed the docstring will be provided by Snarf-documentation, so it
        passed us 0 instead.  But that leads to accidental sharing in purecopy's
        hash-consing, so we use a (hopefully) unique integer instead.  */
-    docstring = make_number (XHASH (function));
+    docstring = make_fixnum (XHASH (function));
   return Fdefalias (function,
 		    list5 (Qautoload, file, docstring, interactive, type),
 		    Qnil);
@@ -2029,7 +2050,7 @@ un_autoload (Lisp_Object oldqueue)
       first = XCAR (queue);
       second = Fcdr (first);
       first = Fcar (first);
-      if (EQ (first, make_number (0)))
+      if (EQ (first, make_fixnum (0)))
 	Vfeatures = second;
       else
 	Ffset (first, second);
@@ -2054,7 +2075,7 @@ it defines a macro.  */)
   if (!CONSP (fundef) || !EQ (Qautoload, XCAR (fundef)))
     return fundef;
 
-  Lisp_Object kind = Fnth (make_number (4), fundef);
+  Lisp_Object kind = Fnth (make_fixnum (4), fundef);
   if (EQ (macro_only, Qmacro)
       && !(EQ (kind, Qt) || EQ (kind, Qmacro)))
     return fundef;
@@ -2243,9 +2264,9 @@ eval_sub (Lisp_Object form)
 
       check_cons_list ();
 
-      if (XINT (numargs) < XSUBR (fun)->min_args
+      if (XFIXNUM (numargs) < XSUBR (fun)->min_args
 	  || (XSUBR (fun)->max_args >= 0
-	      && XSUBR (fun)->max_args < XINT (numargs)))
+	      && XSUBR (fun)->max_args < XFIXNUM (numargs)))
 	xsignal2 (Qwrong_number_of_arguments, original_fun, numargs);
 
       else if (XSUBR (fun)->max_args == UNEVALLED)
@@ -2257,9 +2278,9 @@ eval_sub (Lisp_Object form)
 	  ptrdiff_t argnum = 0;
 	  USE_SAFE_ALLOCA;
 
-	  SAFE_ALLOCA_LISP (vals, XINT (numargs));
+	  SAFE_ALLOCA_LISP (vals, XFIXNUM (numargs));
 
-	  while (CONSP (args_left) && argnum < XINT (numargs))
+	  while (CONSP (args_left) && argnum < XFIXNUM (numargs))
 	    {
 	      Lisp_Object arg = XCAR (args_left);
 	      args_left = XCDR (args_left);
@@ -2289,7 +2310,7 @@ eval_sub (Lisp_Object form)
 	      args_left = Fcdr (args_left);
 	    }
 
-	  set_backtrace_args (specpdl + count, argvals, XINT (numargs));
+	  set_backtrace_args (specpdl + count, argvals, XFIXNUM (numargs));
 
 	  switch (i)
 	    {
@@ -2367,7 +2388,7 @@ eval_sub (Lisp_Object form)
 	  specbind (Qlexical_binding,
 		    NILP (Vinternal_interpreter_environment) ? Qnil : Qt);
 	  exp = apply1 (Fcdr (fun), original_args);
-	  unbind_to (count1, Qnil);
+	  exp = unbind_to (count1, exp);
 	  val = eval_sub (exp);
 	}
       else if (EQ (funcar, Qlambda)
@@ -2402,7 +2423,7 @@ usage: (apply FUNCTION &rest ARGUMENTS)  */)
 
   CHECK_LIST (spread_arg);
 
-  numargs = XINT (Flength (spread_arg));
+  numargs = XFIXNUM (Flength (spread_arg));
 
   if (numargs == 0)
     return Ffuncall (nargs - 1, args);
@@ -2876,7 +2897,7 @@ funcall_subr (struct Lisp_Subr *subr, ptrdiff_t numargs, Lisp_Object *args)
     {
       Lisp_Object fun;
       XSETSUBR (fun, subr);
-      xsignal2 (Qwrong_number_of_arguments, fun, make_number (numargs));
+      xsignal2 (Qwrong_number_of_arguments, fun, make_fixnum (numargs));
     }
 
   else if (subr->max_args == UNEVALLED)
@@ -2957,7 +2978,7 @@ apply_lambda (Lisp_Object fun, Lisp_Object args, ptrdiff_t count)
   Lisp_Object tem;
   USE_SAFE_ALLOCA;
 
-  numargs = XFASTINT (Flength (args));
+  numargs = XFIXNAT (Flength (args));
   SAFE_ALLOCA_LISP (arg_vector, numargs);
   args_left = args;
 
@@ -3019,7 +3040,7 @@ funcall_lambda (Lisp_Object fun, ptrdiff_t nargs,
       if (size <= COMPILED_STACK_DEPTH)
 	xsignal1 (Qinvalid_function, fun);
       syms_left = AREF (fun, COMPILED_ARGLIST);
-      if (INTEGERP (syms_left))
+      if (FIXNUMP (syms_left))
 	/* A byte-code object with an integer args template means we
 	   shouldn't bind any arguments, instead just call the byte-code
 	   interpreter directly; it will push arguments as necessary.
@@ -3080,7 +3101,7 @@ funcall_lambda (Lisp_Object fun, ptrdiff_t nargs,
 	  else if (i < nargs)
 	    arg = arg_vector[i++];
 	  else if (!optional)
-	    xsignal2 (Qwrong_number_of_arguments, fun, make_number (nargs));
+	    xsignal2 (Qwrong_number_of_arguments, fun, make_fixnum (nargs));
 	  else
 	    arg = Qnil;
 
@@ -3097,7 +3118,7 @@ funcall_lambda (Lisp_Object fun, ptrdiff_t nargs,
   if (!NILP (syms_left))
     xsignal1 (Qinvalid_function, fun);
   else if (i < nargs)
-    xsignal2 (Qwrong_number_of_arguments, fun, make_number (nargs));
+    xsignal2 (Qwrong_number_of_arguments, fun, make_fixnum (nargs));
 
   if (!EQ (lexenv, Vinternal_interpreter_environment))
     /* Instantiate a new lexical environment.  */
@@ -3204,7 +3225,7 @@ lambda_arity (Lisp_Object fun)
       if (size <= COMPILED_STACK_DEPTH)
 	xsignal1 (Qinvalid_function, fun);
       syms_left = AREF (fun, COMPILED_ARGLIST);
-      if (INTEGERP (syms_left))
+      if (FIXNUMP (syms_left))
         return get_byte_code_arity (syms_left);
     }
   else
@@ -3219,7 +3240,7 @@ lambda_arity (Lisp_Object fun)
 	xsignal1 (Qinvalid_function, fun);
 
       if (EQ (next, Qand_rest))
-	return Fcons (make_number (minargs), Qmany);
+	return Fcons (make_fixnum (minargs), Qmany);
       else if (EQ (next, Qand_optional))
 	optional = true;
       else
@@ -3233,7 +3254,7 @@ lambda_arity (Lisp_Object fun)
   if (!NILP (syms_left))
     xsignal1 (Qinvalid_function, fun);
 
-  return Fcons (make_number (minargs), make_number (maxargs));
+  return Fcons (make_fixnum (minargs), make_fixnum (maxargs));
 }
 
 DEFUN ("fetch-bytecode", Ffetch_bytecode, Sfetch_bytecode,
@@ -3660,11 +3681,11 @@ get_backtrace_frame (Lisp_Object nframes, Lisp_Object base)
 {
   register EMACS_INT i;
 
-  CHECK_NATNUM (nframes);
+  CHECK_FIXNAT (nframes);
   union specbinding *pdl = get_backtrace_starting_at (base);
 
   /* Find the frame requested.  */
-  for (i = XFASTINT (nframes); i > 0 && backtrace_p (pdl); i--)
+  for (i = XFIXNAT (nframes); i > 0 && backtrace_p (pdl); i--)
     pdl = backtrace_next (pdl);
 
   return pdl;
@@ -3694,7 +3715,7 @@ DEFUN ("backtrace-debug", Fbacktrace_debug, Sbacktrace_debug, 2, 2, 0,
 The debugger is entered when that frame exits, if the flag is non-nil.  */)
   (Lisp_Object level, Lisp_Object flag)
 {
-  CHECK_NUMBER (level);
+  CHECK_FIXNUM (level);
   union specbinding *pdl = get_backtrace_frame(level, Qnil);
 
   if (backtrace_p (pdl))
@@ -3739,6 +3760,42 @@ Return the result of FUNCTION, or nil if no matching frame could be found. */)
      (Lisp_Object function, Lisp_Object nframes, Lisp_Object base)
 {
   return backtrace_frame_apply (function, get_backtrace_frame (nframes, base));
+}
+
+DEFUN ("backtrace--frames-from-thread", Fbacktrace_frames_from_thread,
+       Sbacktrace_frames_from_thread, 1, 1, NULL,
+       doc: /* Return the list of backtrace frames from current execution point in THREAD.
+If a frame has not evaluated the arguments yet (or is a special form),
+the value of the list element is (nil FUNCTION ARG-FORMS...).
+If a frame has evaluated its arguments and called its function already,
+the value of the list element is (t FUNCTION ARG-VALUES...).
+A &rest arg is represented as the tail of the list ARG-VALUES.
+FUNCTION is whatever was supplied as car of evaluated list,
+or a lambda expression for macro calls.  */)
+     (Lisp_Object thread)
+{
+  struct thread_state *tstate;
+  CHECK_THREAD (thread);
+  tstate = XTHREAD (thread);
+
+  union specbinding *pdl = backtrace_thread_top (tstate);
+  Lisp_Object list = Qnil;
+
+  while (backtrace_thread_p (tstate, pdl))
+    {
+      Lisp_Object frame;
+      if (backtrace_nargs (pdl) == UNEVALLED)
+	frame = Fcons (Qnil,
+		      Fcons (backtrace_function (pdl), *backtrace_args (pdl)));
+      else
+	{
+	  Lisp_Object tem = Flist (backtrace_nargs (pdl), backtrace_args (pdl));
+	  frame = Fcons (Qt, Fcons (backtrace_function (pdl), tem));
+	}
+      list = Fcons (frame, list);
+      pdl = backtrace_thread_next (tstate, pdl);
+    }
+  return Fnreverse (list);
 }
 
 /* For backtrace-eval, we want to temporarily unwind the last few elements of
@@ -3865,7 +3922,7 @@ NFRAMES and BASE specify the activation frame to use, as in `backtrace-frame'.  
 {
   union specbinding *frame = get_backtrace_frame (nframes, base);
   union specbinding *prevframe
-    = get_backtrace_frame (make_number (XFASTINT (nframes) - 1), base);
+    = get_backtrace_frame (make_fixnum (XFIXNAT (nframes) - 1), base);
   ptrdiff_t distance = specpdl_ptr - frame;
   Lisp_Object result = Qnil;
   eassert (distance >= 0);
@@ -4216,6 +4273,7 @@ alist of active lexical bindings.  */);
   DEFSYM (QCdebug_on_exit, ":debug-on-exit");
   defsubr (&Smapbacktrace);
   defsubr (&Sbacktrace_frame_internal);
+  defsubr (&Sbacktrace_frames_from_thread);
   defsubr (&Sbacktrace_eval);
   defsubr (&Sbacktrace__locals);
   defsubr (&Sspecial_variable_p);

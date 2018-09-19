@@ -997,9 +997,11 @@ Embedded whitespace, dashes, and periods in the string are ignored."
 
 (define-minor-mode hexl-follow-ascii-mode
   "Minor mode to follow ASCII in current Hexl buffer.
+
 When following is enabled, the ASCII character corresponding to the
 element under the point is highlighted.
 The default activation is controlled by `hexl-follow-ascii'."
+  :global nil
   (if hexl-follow-ascii-mode
       ;; turn it on
       (progn

@@ -671,15 +671,15 @@ file_name_completion (Lisp_Object file, Lisp_Object dirname, bool all_flag,
       /* Reject entries where the encoded strings match, but the
          decoded don't.  For example, "a" should not match "a-ring" on
          file systems that store decomposed characters. */
-      Lisp_Object zero = make_number (0);
+      Lisp_Object zero = make_fixnum (0);
 
       if (check_decoded && SCHARS (file) <= SCHARS (name))
 	{
 	  /* FIXME: This is a copy of the code below.  */
 	  ptrdiff_t compare = SCHARS (file);
 	  Lisp_Object cmp
-	    = Fcompare_strings (name, zero, make_number (compare),
-				file, zero, make_number (compare),
+	    = Fcompare_strings (name, zero, make_fixnum (compare),
+				file, zero, make_fixnum (compare),
 				completion_ignore_case ? Qt : Qnil);
 	  if (!EQ (cmp, Qt))
 	    continue;
@@ -701,10 +701,10 @@ file_name_completion (Lisp_Object file, Lisp_Object dirname, bool all_flag,
 	  /* FIXME: This is a copy of the code in Ftry_completion.  */
 	  ptrdiff_t compare = min (bestmatchsize, SCHARS (name));
 	  Lisp_Object cmp
-	    = Fcompare_strings (bestmatch, zero, make_number (compare),
-				name, zero, make_number (compare),
+	    = Fcompare_strings (bestmatch, zero, make_fixnum (compare),
+				name, zero, make_fixnum (compare),
 				completion_ignore_case ? Qt : Qnil);
-	  ptrdiff_t matchsize = EQ (cmp, Qt) ? compare : eabs (XINT (cmp)) - 1;
+	  ptrdiff_t matchsize = EQ (cmp, Qt) ? compare : eabs (XFIXNUM (cmp)) - 1;
 
 	  if (completion_ignore_case)
 	    {
@@ -729,13 +729,13 @@ file_name_completion (Lisp_Object file, Lisp_Object dirname, bool all_flag,
 		    ==
 		    (matchsize + directoryp == SCHARS (bestmatch)))
 		   && (cmp = Fcompare_strings (name, zero,
-					       make_number (SCHARS (file)),
+					       make_fixnum (SCHARS (file)),
 					       file, zero,
 					       Qnil,
 					       Qnil),
 		       EQ (Qt, cmp))
 		   && (cmp = Fcompare_strings (bestmatch, zero,
-					       make_number (SCHARS (file)),
+					       make_fixnum (SCHARS (file)),
 					       file, zero,
 					       Qnil,
 					       Qnil),
@@ -769,8 +769,8 @@ file_name_completion (Lisp_Object file, Lisp_Object dirname, bool all_flag,
      it does not require any change to be made.  */
   if (matchcount == 1 && !NILP (Fequal (bestmatch, file)))
     return Qt;
-  bestmatch = Fsubstring (bestmatch, make_number (0),
-			  make_number (bestmatchsize));
+  bestmatch = Fsubstring (bestmatch, make_fixnum (0),
+			  make_fixnum (bestmatchsize));
   return bestmatch;
 }
 
@@ -867,7 +867,8 @@ Elements of the attribute list are:
  0. t for directory, string (name linked to) for symbolic link, or nil.
  1. Number of links to file.
  2. File uid as a string or a number.  If a string value cannot be
-  looked up, a numeric value, either an integer or a float, is returned.
+  looked up, an integer value is returned, which could be a fixnum,
+  if it's small enough, otherwise a bignum.
  3. File gid, likewise.
  4. Last access time, as a list of integers (HIGH LOW USEC PSEC) in the
   same style as (current-time).
@@ -876,17 +877,14 @@ Elements of the attribute list are:
   change to the file's contents.
  6. Last status change time, likewise.  This is the time of last change
   to the file's attributes: owner and group, access mode bits, etc.
- 7. Size in bytes.
-  This is a floating point number if the size is too large for an integer.
+ 7. Size in bytes, which could be a fixnum, if it's small enough,
+  otherwise a bignum.
  8. File modes, as a string of ten letters or dashes as in ls -l.
  9. An unspecified value, present only for backward compatibility.
-10. inode number.  If it is larger than what an Emacs integer can hold,
-  this is of the form (HIGH . LOW): first the high bits, then the low 16 bits.
-  If even HIGH is too large for an Emacs integer, this is instead of the form
-  (HIGH MIDDLE . LOW): first the high bits, then the middle 24 bits,
-  and finally the low 16 bits.
-11. Filesystem device number.  If it is larger than what the Emacs
-  integer can hold, this is a cons cell, similar to the inode number.
+10. inode number, which could be a fixnum, if it's small enough,
+  otherwise a bignum.
+11. Filesystem device number.  If it is larger than what a fixnum
+  can hold, it is a bignum.
 
 On most filesystems, the combination of the inode and the device
 number uniquely identifies the file.
@@ -1009,13 +1007,13 @@ file_attributes (int fd, char const *name,
 
   return CALLN (Flist,
 		file_type,
-		make_number (s.st_nlink),
+		make_fixnum (s.st_nlink),
 		(uname
 		 ? DECODE_SYSTEM (build_unibyte_string (uname))
-		 : make_fixnum_or_float (s.st_uid)),
+		 : INT_TO_INTEGER (s.st_uid)),
 		(gname
 		 ? DECODE_SYSTEM (build_unibyte_string (gname))
-		 : make_fixnum_or_float (s.st_gid)),
+		 : INT_TO_INTEGER (s.st_gid)),
 		make_lisp_time (get_stat_atime (&s)),
 		make_lisp_time (get_stat_mtime (&s)),
 		make_lisp_time (get_stat_ctime (&s)),
@@ -1024,14 +1022,14 @@ file_attributes (int fd, char const *name,
 		   files of sizes in the 2-4 GiB range wrap around to
 		   negative values, as this is a common bug on older
 		   32-bit platforms.  */
-		make_fixnum_or_float (sizeof (s.st_size) == 4
-				      ? s.st_size & 0xffffffffu
-				      : s.st_size),
+		INT_TO_INTEGER (sizeof (s.st_size) == 4
+			    ? s.st_size & 0xffffffffu
+			    : s.st_size),
 
 		make_string (modes, 10),
 		Qt,
-		INTEGER_TO_CONS (s.st_ino),
-		INTEGER_TO_CONS (s.st_dev));
+		INT_TO_INTEGER (s.st_ino),
+		INT_TO_INTEGER (s.st_dev));
 }
 
 DEFUN ("file-attributes-lessp", Ffile_attributes_lessp, Sfile_attributes_lessp, 2, 2, 0,
@@ -1058,7 +1056,7 @@ return a list with one element, taken from `user-real-login-name'.  */)
 
   endpwent ();
 #endif
-  if (EQ (users, Qnil))
+  if (NILP (users))
     /* At least current user is always known. */
     users = list1 (Vuser_real_login_name);
   return users;

@@ -2135,9 +2135,9 @@ It must accept a buffer as its only required argument.")
 	 ;; Make the menu of buffers proper.
 	 (setq buffers-menu
                (let ((i 0)
-                     (limit (if (and (integerp buffers-menu-max-size)
-                                     (> buffers-menu-max-size 1))
-                                buffers-menu-max-size most-positive-fixnum))
+		     (limit (and (integerp buffers-menu-max-size)
+				 (> buffers-menu-max-size 1)
+				 buffers-menu-max-size))
                      alist)
 		 ;; Put into each element of buffer-list
 		 ;; the name for actual display,
@@ -2161,7 +2161,7 @@ It must accept a buffer as its only required argument.")
                              alist)
                        ;; If requested, list only the N most recently
                        ;; selected buffers.
-                       (when (= limit (setq i (1+ i)))
+                       (when (eql limit (setq i (1+ i)))
                          (setq buffers nil)))))
 		 (list (menu-bar-buffer-vector alist))))
 
@@ -2285,9 +2285,6 @@ It must accept a buffer as its only required argument.")
 
 (define-minor-mode menu-bar-mode
   "Toggle display of a menu bar on each frame (Menu Bar mode).
-With a prefix argument ARG, enable Menu Bar mode if ARG is
-positive, and disable it otherwise.  If called from Lisp, also
-enable Menu Bar mode if ARG is omitted or nil.
 
 This command applies to all frames that exist and frames to be
 created in the future."

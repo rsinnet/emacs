@@ -1173,6 +1173,12 @@ dictionary from that list was found."
     ;; Parse and set values for default dictionary.
     (setq hunspell-default-dict (or hunspell-multi-dict
 				    (car hunspell-default-dict)))
+    ;; If hunspell-default-dict is nil, ispell-parse-hunspell-affix-file
+    ;; will barf with an error message that doesn't help users figure
+    ;; out what is wrong.  Produce an error message that points to the
+    ;; root cause of the problem.
+    (or hunspell-default-dict
+        (error "Can't find Hunspell dictionary with a .aff affix file"))
     (setq hunspell-default-dict-entry
 	  (ispell-parse-hunspell-affix-file hunspell-default-dict))
     ;; Create an alist of found dicts with only names, except for default dict.
@@ -2262,8 +2268,9 @@ Global `ispell-quit' set to start location to continue spell session."
 		    (ispell-pdict-save ispell-silently-savep)
 		    (message "%s"
 		     (substitute-command-keys
-		      (concat "Spell-checking suspended;"
-			      " use C-u \\[ispell-word] to resume")))
+		      (concat
+                       "Spell-checking suspended; use "
+		       "\\[universal-argument] \\[ispell-word] to resume")))
 		    (setq ispell-quit start)
 		    nil)
 		   ((= char ?q)
@@ -3695,9 +3702,6 @@ available on the net."
 ;;;###autoload
 (define-minor-mode ispell-minor-mode
   "Toggle last-word spell checking (Ispell minor mode).
-With a prefix argument ARG, enable Ispell minor mode if ARG is
-positive, and disable it otherwise.  If called from Lisp, enable
-the mode if ARG is omitted or nil.
 
 Ispell minor mode is a buffer-local minor mode.  When enabled,
 typing SPC or RET warns you if the previous word is incorrectly

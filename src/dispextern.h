@@ -306,24 +306,24 @@ INLINE int
 GLYPH_CODE_CHAR (Lisp_Object gc)
 {
   return (CONSP (gc)
-	  ? XINT (XCAR (gc))
-	  : XINT (gc) & MAX_CHAR);
+	  ? XFIXNUM (XCAR (gc))
+	  : XFIXNUM (gc) & MAX_CHAR);
 }
 
 INLINE int
 GLYPH_CODE_FACE (Lisp_Object gc)
 {
-  return CONSP (gc) ? XINT (XCDR (gc)) : XINT (gc) >> CHARACTERBITS;
+  return CONSP (gc) ? XFIXNUM (XCDR (gc)) : XFIXNUM (gc) >> CHARACTERBITS;
 }
 
 #define SET_GLYPH_FROM_GLYPH_CODE(glyph, gc)				\
   do									\
     {									\
       if (CONSP (gc))							\
-	SET_GLYPH (glyph, XINT (XCAR (gc)), XINT (XCDR (gc)));		\
+	SET_GLYPH (glyph, XFIXNUM (XCAR (gc)), XFIXNUM (XCDR (gc)));		\
       else								\
-	SET_GLYPH (glyph, (XINT (gc) & ((1 << CHARACTERBITS)-1)),	\
-		   (XINT (gc) >> CHARACTERBITS));			\
+	SET_GLYPH (glyph, (XFIXNUM (gc) & ((1 << CHARACTERBITS)-1)),	\
+		   (XFIXNUM (gc) >> CHARACTERBITS));			\
     }									\
   while (false)
 
@@ -1837,8 +1837,8 @@ GLYPH_CODE_P (Lisp_Object gc)
 {
   return (CONSP (gc)
 	  ? (CHARACTERP (XCAR (gc))
-	     && RANGED_INTEGERP (0, XCDR (gc), MAX_FACE_ID))
-	  : (RANGED_INTEGERP
+	     && RANGED_FIXNUMP (0, XCDR (gc), MAX_FACE_ID))
+	  : (RANGED_FIXNUMP
 	     (0, gc,
 	      (MAX_FACE_ID < TYPE_MAXIMUM (EMACS_INT) >> CHARACTERBITS
 	       ? ((EMACS_INT) MAX_FACE_ID << CHARACTERBITS) | MAX_CHAR
@@ -2482,7 +2482,7 @@ struct it
 
      If `what' is anything else, these two are undefined (will
      probably hold values for the last IT_CHARACTER or IT_COMPOSITION
-     traversed by the iterator.
+     traversed by the iterator).
 
      The values are updated by get_next_display_element, so they are
      out of sync with the value returned by IT_CHARPOS between the
@@ -3569,6 +3569,10 @@ extern void create_tty_output (struct frame *);
 extern struct terminal *init_tty (const char *, const char *, bool);
 extern void tty_append_glyph (struct it *);
 
+/* All scrolling costs measured in characters.
+   So no cost can exceed the area of a frame, measured in characters.
+   Let's hope this is never more than 1000000 characters.  */
+enum { SCROLL_INFINITY = 1000000 };
 
 /* Defined in scroll.c */
 

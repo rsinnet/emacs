@@ -222,20 +222,19 @@
 ;; Can this be shared with 8859-11?
 ;; N.b. not all of these are defined in Unicode.
 (define-charset 'thai-tis620
-  "TIS620.2533"
+  "MULE charset for TIS620.2533"
   :short-name "TIS620.2533"
   :iso-final-char ?T
   :emacs-mule-id 133
   :code-space [32 127]
   :code-offset #x0E00)
 
-;; Fixme: doc for this, c.f. above
 (define-charset 'tis620-2533
-  "TIS620.2533"
+  "TIS620.2533, a.k.a. TIS-620.  Like `thai-iso8859-11', but without NBSP."
   :short-name "TIS620.2533"
   :ascii-compatible-p t
   :code-space [0 255]
-  :superset '(ascii eight-bit-control (thai-tis620 . 128)))
+  :superset '(ascii (thai-tis620 . 128)))
 
 (define-charset 'jisx0201
   "JISX0201"
@@ -1305,6 +1304,11 @@ is treated as a character."
   :bom '(utf-8-with-signature . utf-8))
 
 (define-coding-system-alias 'mule-utf-8 'utf-8)
+;; See this page:
+;; https://docs.microsoft.com/en-us/windows/desktop/intl/code-page-identifiers
+;; Starting with Windows 10, people are trying to set their systems to
+;; use UTF-8 , so we had better recognized this alias:
+(define-coding-system-alias 'cp65001 'utf-8)
 
 (define-coding-system 'utf-8-emacs
   "Support for all Emacs characters (including non-Unicode characters)."

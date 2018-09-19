@@ -695,7 +695,7 @@ one.  The window with the lowest use time is the least recently
 selected one.  */)
   (Lisp_Object window)
 {
-  return make_number (decode_live_window (window)->use_time);
+  return make_fixnum (decode_live_window (window)->use_time);
 }
 
 DEFUN ("window-pixel-width", Fwindow_pixel_width, Swindow_pixel_width, 0, 1, 0,
@@ -708,7 +708,7 @@ an internal window, its pixel width is the width of the screen areas
 spanned by its children.  */)
      (Lisp_Object window)
 {
-  return make_number (decode_valid_window (window)->pixel_width);
+  return make_fixnum (decode_valid_window (window)->pixel_width);
 }
 
 DEFUN ("window-pixel-height", Fwindow_pixel_height, Swindow_pixel_height, 0, 1, 0,
@@ -720,7 +720,7 @@ divider, if any.  If WINDOW is an internal window, its pixel height is
 the height of the screen areas spanned by its children.  */)
   (Lisp_Object window)
 {
-  return make_number (decode_valid_window (window)->pixel_height);
+  return make_fixnum (decode_valid_window (window)->pixel_height);
 }
 
 DEFUN ("window-pixel-width-before-size-change",
@@ -734,7 +734,7 @@ The return value is the pixel width of WINDOW at the last time
 after that.  */)
   (Lisp_Object window)
 {
-  return (make_number
+  return (make_fixnum
 	  (decode_valid_window (window)->pixel_width_before_size_change));
 }
 
@@ -749,7 +749,7 @@ The return value is the pixel height of WINDOW at the last time
 after that.  */)
   (Lisp_Object window)
 {
-  return (make_number
+  return (make_fixnum
 	  (decode_valid_window (window)->pixel_height_before_size_change));
 }
 
@@ -778,12 +778,12 @@ total height of WINDOW.  */)
   struct window *w = decode_valid_window (window);
 
   if (! EQ (round, Qfloor) && ! EQ (round, Qceiling))
-    return make_number (w->total_lines);
+    return make_fixnum (w->total_lines);
   else
     {
       int unit = FRAME_LINE_HEIGHT (WINDOW_XFRAME (w));
 
-      return make_number (EQ (round, Qceiling)
+      return make_fixnum (EQ (round, Qceiling)
 			  ? ((w->pixel_height + unit - 1) /unit)
 			  : (w->pixel_height / unit));
     }
@@ -815,12 +815,12 @@ total width of WINDOW.  */)
   struct window *w = decode_valid_window (window);
 
   if (! EQ (round, Qfloor) && ! EQ (round, Qceiling))
-    return make_number (w->total_cols);
+    return make_fixnum (w->total_cols);
   else
     {
       int unit = FRAME_COLUMN_WIDTH (WINDOW_XFRAME (w));
 
-      return make_number (EQ (round, Qceiling)
+      return make_fixnum (EQ (round, Qceiling)
 			  ? ((w->pixel_width + unit - 1) /unit)
 			  : (w->pixel_width / unit));
     }
@@ -898,7 +898,7 @@ DEFUN ("window-pixel-left", Fwindow_pixel_left, Swindow_pixel_left, 0, 1, 0,
 WINDOW must be a valid window and defaults to the selected one.  */)
   (Lisp_Object window)
 {
-  return make_number (decode_valid_window (window)->pixel_left);
+  return make_fixnum (decode_valid_window (window)->pixel_left);
 }
 
 DEFUN ("window-pixel-top", Fwindow_pixel_top, Swindow_pixel_top, 0, 1, 0,
@@ -906,7 +906,7 @@ DEFUN ("window-pixel-top", Fwindow_pixel_top, Swindow_pixel_top, 0, 1, 0,
 WINDOW must be a valid window and defaults to the selected one.  */)
   (Lisp_Object window)
 {
-  return make_number (decode_valid_window (window)->pixel_top);
+  return make_fixnum (decode_valid_window (window)->pixel_top);
 }
 
 DEFUN ("window-left-column", Fwindow_left_column, Swindow_left_column, 0, 1, 0,
@@ -918,7 +918,7 @@ value is 0 if there is no window to the left of WINDOW.
 WINDOW must be a valid window and defaults to the selected one.  */)
   (Lisp_Object window)
 {
-  return make_number (decode_valid_window (window)->left_col);
+  return make_fixnum (decode_valid_window (window)->left_col);
 }
 
 DEFUN ("window-top-line", Fwindow_top_line, Swindow_top_line, 0, 1, 0,
@@ -930,7 +930,7 @@ there is no window above WINDOW.
 WINDOW must be a valid window and defaults to the selected one.  */)
   (Lisp_Object window)
 {
-  return make_number (decode_valid_window (window)->top_line);
+  return make_fixnum (decode_valid_window (window)->top_line);
 }
 
 /* Return the number of lines/pixels of W's body.  Don't count any mode
@@ -997,7 +997,7 @@ means that if a line at the bottom of the text area is only partially
 visible, that line is not counted.  */)
   (Lisp_Object window, Lisp_Object pixelwise)
 {
-  return make_number (window_body_height (decode_live_window (window),
+  return make_fixnum (window_body_height (decode_live_window (window),
 					  !NILP (pixelwise)));
 }
 
@@ -1017,7 +1017,7 @@ Note that the returned value includes the column reserved for the
 continuation glyph.  */)
   (Lisp_Object window, Lisp_Object pixelwise)
 {
-  return make_number (window_body_width (decode_live_window (window),
+  return make_fixnum (window_body_width (decode_live_window (window),
 					 !NILP (pixelwise)));
 }
 
@@ -1027,7 +1027,7 @@ DEFUN ("window-mode-line-height", Fwindow_mode_line_height,
 WINDOW must be a live window and defaults to the selected one.  */)
   (Lisp_Object window)
 {
-  return (make_number (WINDOW_MODE_LINE_HEIGHT (decode_live_window (window))));
+  return (make_fixnum (WINDOW_MODE_LINE_HEIGHT (decode_live_window (window))));
 }
 
 DEFUN ("window-header-line-height", Fwindow_header_line_height,
@@ -1036,7 +1036,7 @@ DEFUN ("window-header-line-height", Fwindow_header_line_height,
 WINDOW must be a live window and defaults to the selected one.  */)
   (Lisp_Object window)
 {
-  return (make_number (WINDOW_HEADER_LINE_HEIGHT (decode_live_window (window))));
+  return (make_fixnum (WINDOW_HEADER_LINE_HEIGHT (decode_live_window (window))));
 }
 
 DEFUN ("window-right-divider-width", Fwindow_right_divider_width,
@@ -1045,7 +1045,7 @@ DEFUN ("window-right-divider-width", Fwindow_right_divider_width,
 WINDOW must be a live window and defaults to the selected one.  */)
   (Lisp_Object window)
 {
-  return (make_number (WINDOW_RIGHT_DIVIDER_WIDTH (decode_live_window (window))));
+  return (make_fixnum (WINDOW_RIGHT_DIVIDER_WIDTH (decode_live_window (window))));
 }
 
 DEFUN ("window-bottom-divider-width", Fwindow_bottom_divider_width,
@@ -1054,7 +1054,7 @@ DEFUN ("window-bottom-divider-width", Fwindow_bottom_divider_width,
 WINDOW must be a live window and defaults to the selected one.  */)
   (Lisp_Object window)
 {
-  return (make_number (WINDOW_BOTTOM_DIVIDER_WIDTH (decode_live_window (window))));
+  return (make_fixnum (WINDOW_BOTTOM_DIVIDER_WIDTH (decode_live_window (window))));
 }
 
 DEFUN ("window-scroll-bar-width", Fwindow_scroll_bar_width,
@@ -1063,7 +1063,7 @@ DEFUN ("window-scroll-bar-width", Fwindow_scroll_bar_width,
 WINDOW must be a live window and defaults to the selected one.  */)
   (Lisp_Object window)
 {
-  return (make_number (WINDOW_SCROLL_BAR_AREA_WIDTH (decode_live_window (window))));
+  return (make_fixnum (WINDOW_SCROLL_BAR_AREA_WIDTH (decode_live_window (window))));
 }
 
 DEFUN ("window-scroll-bar-height", Fwindow_scroll_bar_height,
@@ -1072,7 +1072,7 @@ DEFUN ("window-scroll-bar-height", Fwindow_scroll_bar_height,
 WINDOW must be a live window and defaults to the selected one.  */)
   (Lisp_Object window)
 {
-  return (make_number (WINDOW_SCROLL_BAR_AREA_HEIGHT (decode_live_window (window))));
+  return (make_fixnum (WINDOW_SCROLL_BAR_AREA_HEIGHT (decode_live_window (window))));
 }
 
 DEFUN ("window-hscroll", Fwindow_hscroll, Swindow_hscroll, 0, 1, 0,
@@ -1080,7 +1080,7 @@ DEFUN ("window-hscroll", Fwindow_hscroll, Swindow_hscroll, 0, 1, 0,
 WINDOW must be a live window and defaults to the selected one.  */)
   (Lisp_Object window)
 {
-  return make_number (decode_live_window (window)->hscroll);
+  return make_fixnum (decode_live_window (window)->hscroll);
 }
 
 /* Set W's horizontal scroll amount to HSCROLL clipped to a reasonable
@@ -1104,7 +1104,7 @@ set_window_hscroll (struct window *w, EMACS_INT hscroll)
   w->hscroll = new_hscroll;
   w->suspend_auto_hscroll = true;
 
-  return make_number (new_hscroll);
+  return make_fixnum (new_hscroll);
 }
 
 DEFUN ("set-window-hscroll", Fset_window_hscroll, Sset_window_hscroll, 2, 2, 0,
@@ -1117,8 +1117,8 @@ Note that if `automatic-hscrolling' is non-nil, you cannot scroll the
 window so that the location of point moves off-window.  */)
   (Lisp_Object window, Lisp_Object ncol)
 {
-  CHECK_NUMBER (ncol);
-  return set_window_hscroll (decode_live_window (window), XINT (ncol));
+  CHECK_FIXNUM (ncol);
+  return set_window_hscroll (decode_live_window (window), XFIXNUM (ncol));
 }
 
 DEFUN ("window-redisplay-end-trigger", Fwindow_redisplay_end_trigger,
@@ -1383,8 +1383,8 @@ If they are in the windows's left or right marginal areas, `left-margin'\n\
   CHECK_CONS (coordinates);
   lx = Fcar (coordinates);
   ly = Fcdr (coordinates);
-  CHECK_NUMBER_OR_FLOAT (lx);
-  CHECK_NUMBER_OR_FLOAT (ly);
+  CHECK_NUMBER (lx);
+  CHECK_NUMBER (ly);
   x = FRAME_PIXEL_X_FROM_CANON_X (f, lx) + FRAME_INTERNAL_BORDER_WIDTH (f);
   y = FRAME_PIXEL_Y_FROM_CANON_Y (f, ly) + FRAME_INTERNAL_BORDER_WIDTH (f);
 
@@ -1533,9 +1533,8 @@ column 0.  */)
 {
   struct frame *f = decode_live_frame (frame);
 
-  /* Check that arguments are integers or floats.  */
-  CHECK_NUMBER_OR_FLOAT (x);
-  CHECK_NUMBER_OR_FLOAT (y);
+  CHECK_NUMBER (x);
+  CHECK_NUMBER (y);
 
   return window_from_coordinates (f,
 				  (FRAME_PIXEL_X_FROM_CANON_X (f, x)
@@ -1561,7 +1560,7 @@ correct to return the top-level value of `point', outside of any
   register struct window *w = decode_live_window (window);
 
   if (w == XWINDOW (selected_window))
-    return make_number (BUF_PT (XBUFFER (w->contents)));
+    return make_fixnum (BUF_PT (XBUFFER (w->contents)));
   else
     return Fmarker_position (w->pointm);
 }
@@ -1652,7 +1651,7 @@ if it isn't already recorded.  */)
       move_it_vertically (&it, window_box_height (w));
       if (it.current_y < it.last_visible_y)
 	move_it_past_eol (&it);
-      value = make_number (IT_CHARPOS (it));
+      value = make_fixnum (IT_CHARPOS (it));
       bidi_unshelve_cache (itdata, false);
 
       if (old_buffer)
@@ -1683,7 +1682,7 @@ Return POS.  */)
 	  struct buffer *old_buffer = current_buffer;
 
 	  /* ... but here we want to catch type error before buffer change.  */
-	  CHECK_NUMBER_COERCE_MARKER (pos);
+	  CHECK_FIXNUM_COERCE_MARKER (pos);
 	  set_buffer_internal (XBUFFER (w->contents));
 	  Fgoto_char (pos);
 	  set_buffer_internal (old_buffer);
@@ -1763,8 +1762,8 @@ POS, ROWH is the visible height of that row, and VPOS is the row number
     posint = -1;
   else if (!NILP (pos))
     {
-      CHECK_NUMBER_COERCE_MARKER (pos);
-      posint = XINT (pos);
+      CHECK_FIXNUM_COERCE_MARKER (pos);
+      posint = XFIXNUM (pos);
     }
   else if (w == XWINDOW (selected_window))
     posint = PT;
@@ -1789,8 +1788,8 @@ POS, ROWH is the visible height of that row, and VPOS is the row number
       Lisp_Object part = Qnil;
       if (!fully_p)
 	part = list4i (rtop, rbot, rowh, vpos);
-      in_window = Fcons (make_number (x),
-			 Fcons (make_number (y), part));
+      in_window = Fcons (make_fixnum (x),
+			 Fcons (make_fixnum (y), part));
     }
 
   return in_window;
@@ -1869,8 +1868,8 @@ Return nil if window display is not up-to-date.  In that case, use
 	      : Qnil);
     }
 
-  CHECK_NUMBER (line);
-  n = XINT (line);
+  CHECK_FIXNUM (line);
+  n = XFIXNUM (line);
 
   row = MATRIX_FIRST_TEXT_ROW (w->current_matrix);
   end_row = MATRIX_BOTTOM_TEXT_ROW (w->current_matrix, w);
@@ -1972,10 +1971,10 @@ though when run from an idle timer with a delay of zero seconds.  */)
     row = (NILP (body)
 	   ? MATRIX_ROW (w->current_matrix, 0)
 	   : MATRIX_FIRST_TEXT_ROW (w->current_matrix));
-  else if (NUMBERP (first))
+  else if (FIXNUMP (first))
     {
       CHECK_RANGED_INTEGER (first, 0, w->current_matrix->nrows);
-      row = MATRIX_ROW (w->current_matrix, XINT (first));
+      row = MATRIX_ROW (w->current_matrix, XFIXNUM (first));
     }
   else
     error ("Invalid specification of first line");
@@ -1985,10 +1984,10 @@ though when run from an idle timer with a delay of zero seconds.  */)
     end_row = (NILP (body)
 	       ? MATRIX_ROW (w->current_matrix, w->current_matrix->nrows)
 	       : MATRIX_BOTTOM_TEXT_ROW (w->current_matrix, w));
-  else if (NUMBERP (last))
+  else if (FIXNUMP (last))
     {
       CHECK_RANGED_INTEGER (last, 0, w->current_matrix->nrows);
-      end_row = MATRIX_ROW (w->current_matrix, XINT (last));
+      end_row = MATRIX_ROW (w->current_matrix, XFIXNUM (last));
     }
   else
     error ("Invalid specification of last line");
@@ -2001,19 +2000,19 @@ though when run from an idle timer with a delay of zero seconds.  */)
 	{
 	  struct glyph *glyph = row->glyphs[TEXT_AREA];
 
-	  rows = Fcons (Fcons (make_number
+	  rows = Fcons (Fcons (make_fixnum
 			       (invert
 				? glyph->pixel_width
 				: window_width - glyph->pixel_width),
-			       make_number (row->y + row->height - subtract)),
+			       make_fixnum (row->y + row->height - subtract)),
 			rows);
 	}
       else
-	rows = Fcons (Fcons (make_number
+	rows = Fcons (Fcons (make_fixnum
 			     (invert
 			      ? window_width - row->pixel_width
 			      : row->pixel_width),
-			     make_number (row->y + row->height - subtract)),
+			     make_fixnum (row->y + row->height - subtract)),
 		      rows);
       row++;
     }
@@ -2492,7 +2491,7 @@ candidate_window_p (Lisp_Object window, Lisp_Object owindow,
 	    == FRAME_TERMINAL (XFRAME (selected_frame)));
 
     }
-  else if (INTEGERP (all_frames) && XINT (all_frames) == 0)
+  else if (FIXNUMP (all_frames) && XFIXNUM (all_frames) == 0)
     {
       candidate_p = (FRAME_VISIBLE_P (f) || FRAME_ICONIFIED_P (f)
 #ifdef HAVE_X_WINDOWS
@@ -2551,7 +2550,7 @@ decode_next_window_args (Lisp_Object *window, Lisp_Object *minibuf, Lisp_Object 
 	 : Qnil);
   else if (EQ (*all_frames, Qvisible))
     ;
-  else if (EQ (*all_frames, make_number (0)))
+  else if (EQ (*all_frames, make_fixnum (0)))
     ;
   else if (FRAMEP (*all_frames))
     ;
@@ -2834,7 +2833,7 @@ window_loop (enum window_loop type, Lisp_Object obj, bool mini,
 
   if (f)
     frame_arg = Qlambda;
-  else if (EQ (frames, make_number (0)))
+  else if (EQ (frames, make_fixnum (0)))
     frame_arg = frames;
   else if (EQ (frames, Qvisible))
     frame_arg = frames;
@@ -3443,7 +3442,11 @@ run_window_size_change_functions (Lisp_Object frame)
 {
   struct frame *f = XFRAME (frame);
   struct window *r = XWINDOW (FRAME_ROOT_WINDOW (f));
-  Lisp_Object functions = Vwindow_size_change_functions;
+
+  if (NILP (Vrun_hooks)
+      || !(f->can_x_set_window_size)
+      || !(f->after_make_frame))
+    return;
 
   if (FRAME_WINDOW_CONFIGURATION_CHANGED (f)
       /* Here we implicitly exclude the possibility that the height of
@@ -3451,11 +3454,44 @@ run_window_size_change_functions (Lisp_Object frame)
 	 of FRAME's root window alone.  */
       || window_size_changed (r))
     {
-      while (CONSP (functions))
+      Lisp_Object globals = Fdefault_value (Qwindow_size_change_functions);
+      Lisp_Object windows = Fwindow_list (frame, Qlambda, Qnil);
+      /* The buffers for which the local hook was already run.  */
+      Lisp_Object buffers = Qnil;
+
+      for (; CONSP (windows); windows = XCDR (windows))
 	{
-	  if (!EQ (XCAR (functions), Qt))
-	    safe_call1 (XCAR (functions), frame);
-	  functions = XCDR (functions);
+	  Lisp_Object window = XCAR (windows);
+	  Lisp_Object buffer = Fwindow_buffer (window);
+
+	  /* Run a buffer-local value only once for that buffer and
+	     only if at least one window showing that buffer on FRAME
+	     actually changed its size.  Note that the function is run
+	     with FRAME as its argument and as such oblivious to the
+	     window checked below.  */
+	  if (window_size_changed (XWINDOW (window))
+	      && !NILP (Flocal_variable_p (Qwindow_size_change_functions, buffer))
+	      && NILP (Fmemq (buffer, buffers)))
+	    {
+	      Lisp_Object locals
+		= Fbuffer_local_value (Qwindow_size_change_functions, buffer);
+
+	      while (CONSP (locals))
+		{
+		  if (!EQ (XCAR (locals), Qt))
+		    safe_call1 (XCAR (locals), frame);
+		  locals = XCDR (locals);
+		}
+
+	      buffers = Fcons (buffer, buffers);
+	    }
+	}
+
+      while (CONSP (globals))
+	{
+	  if (!EQ (XCAR (globals), Qt))
+	    safe_call1 (XCAR (globals), frame);
+	  globals = XCDR (globals);
 	}
 
       window_set_before_size_change_sizes (r);
@@ -3494,8 +3530,8 @@ set_window_buffer (Lisp_Object window, Lisp_Object buffer,
   b->display_error_modiff = 0;
 
   /* Update time stamps of buffer display.  */
-  if (INTEGERP (BVAR (b, display_count)))
-    bset_display_count (b, make_number (XINT (BVAR (b, display_count)) + 1));
+  if (FIXNUMP (BVAR (b, display_count)))
+    bset_display_count (b, make_fixnum (XFIXNUM (BVAR (b, display_count)) + 1));
   bset_display_time (b, Fcurrent_time ());
 
   w->window_end_pos = 0;
@@ -3513,7 +3549,7 @@ set_window_buffer (Lisp_Object window, Lisp_Object buffer,
       set_marker_both (w->pointm, buffer, BUF_PT (b), BUF_PT_BYTE (b));
       set_marker_both (w->old_pointm, buffer, BUF_PT (b), BUF_PT_BYTE (b));
       set_marker_restricted (w->start,
-			     make_number (b->last_window_start),
+			     make_fixnum (b->last_window_start),
 			     buffer);
       w->start_at_line_beg = false;
       w->force_start = false;
@@ -3769,9 +3805,9 @@ make_window (void)
      Lisp data to nil, so do it only for slots which should not be nil.  */
   wset_normal_lines (w, make_float (1.0));
   wset_normal_cols (w, make_float (1.0));
-  wset_new_total (w, make_number (0));
-  wset_new_normal (w, make_number (0));
-  wset_new_pixel (w, make_number (0));
+  wset_new_total (w, make_fixnum (0));
+  wset_new_normal (w, make_fixnum (0));
+  wset_new_pixel (w, make_fixnum (0));
   wset_start (w, Fmake_marker ());
   wset_pointm (w, Fmake_marker ());
   wset_old_pointm (w, Fmake_marker ());
@@ -3820,14 +3856,14 @@ Note: This function does not operate on any child windows of WINDOW.  */)
   (Lisp_Object window, Lisp_Object size, Lisp_Object add)
 {
   struct window *w = decode_valid_window (window);
-  EMACS_INT size_min = NILP (add) ? 0 : - XINT (w->new_pixel);
+  EMACS_INT size_min = NILP (add) ? 0 : - XFIXNUM (w->new_pixel);
   EMACS_INT size_max = size_min + min (INT_MAX, MOST_POSITIVE_FIXNUM);
 
   CHECK_RANGED_INTEGER (size, size_min, size_max);
   if (NILP (add))
     wset_new_pixel (w, size);
   else
-    wset_new_pixel (w, make_number (XINT (w->new_pixel) + XINT (size)));
+    wset_new_pixel (w, make_fixnum (XFIXNUM (w->new_pixel) + XFIXNUM (size)));
 
   return w->new_pixel;
 }
@@ -3849,11 +3885,11 @@ Note: This function does not operate on any child windows of WINDOW.  */)
 {
   struct window *w = decode_valid_window (window);
 
-  CHECK_NUMBER (size);
+  CHECK_FIXNUM (size);
   if (NILP (add))
     wset_new_total (w, size);
   else
-    wset_new_total (w, make_number (XINT (w->new_total) + XINT (size)));
+    wset_new_total (w, make_fixnum (XFIXNUM (w->new_total) + XFIXNUM (size)));
 
   return w->new_total;
 }
@@ -3895,7 +3931,7 @@ window_resize_check (struct window *w, bool horflag)
 	{
 	  while (c)
 	    {
-	      if (XINT (c->new_pixel) != XINT (w->new_pixel)
+	      if (XFIXNUM (c->new_pixel) != XFIXNUM (w->new_pixel)
 		  || !window_resize_check (c, horflag))
 		return false;
 
@@ -3908,14 +3944,14 @@ window_resize_check (struct window *w, bool horflag)
 	/* The sum of the heights of the child windows of W must equal
 	   W's height.  */
 	{
-	  int remaining_pixels = XINT (w->new_pixel);
+	  int remaining_pixels = XFIXNUM (w->new_pixel);
 
 	  while (c)
 	    {
 	      if (!window_resize_check (c, horflag))
 		return false;
 
-	      remaining_pixels -= XINT (c->new_pixel);
+	      remaining_pixels -= XFIXNUM (c->new_pixel);
 	      if (remaining_pixels < 0)
 		return false;
 	      c = NILP (c->next) ? 0 : XWINDOW (c->next);
@@ -3932,14 +3968,14 @@ window_resize_check (struct window *w, bool horflag)
 	/* The sum of the widths of the child windows of W must equal W's
 	   width.  */
 	{
-	  int remaining_pixels = XINT (w->new_pixel);
+	  int remaining_pixels = XFIXNUM (w->new_pixel);
 
 	  while (c)
 	    {
 	      if (!window_resize_check (c, horflag))
 		return false;
 
-	      remaining_pixels -= XINT (c->new_pixel);
+	      remaining_pixels -= XFIXNUM (c->new_pixel);
 	      if (remaining_pixels < 0)
 		return false;
 	      c = NILP (c->next) ? 0 : XWINDOW (c->next);
@@ -3952,7 +3988,7 @@ window_resize_check (struct window *w, bool horflag)
 	{
 	  while (c)
 	    {
-	      if (XINT (c->new_pixel) != XINT (w->new_pixel)
+	      if (XFIXNUM (c->new_pixel) != XFIXNUM (w->new_pixel)
 		  || !window_resize_check (c, horflag))
 		return false;
 
@@ -3966,7 +4002,7 @@ window_resize_check (struct window *w, bool horflag)
     /* A leaf window.  Make sure it's not too small.  The following
        hardcodes the values of `window-safe-min-width' (2) and
        `window-safe-min-height' (1) which are defined in window.el.  */
-    return (XINT (w->new_pixel) >= (horflag
+    return (XFIXNUM (w->new_pixel) >= (horflag
 				    ? (2 * FRAME_COLUMN_WIDTH (f))
 				    : FRAME_LINE_HEIGHT (f)));
 }
@@ -3992,7 +4028,7 @@ window_resize_apply (struct window *w, bool horflag)
      parent window has been set *before*.  */
   if (horflag)
     {
-      w->pixel_width = XFASTINT (w->new_pixel);
+      w->pixel_width = XFIXNAT (w->new_pixel);
       w->total_cols = w->pixel_width / unit;
       if (NUMBERP (w->new_normal))
 	wset_normal_cols (w, w->new_normal);
@@ -4001,7 +4037,7 @@ window_resize_apply (struct window *w, bool horflag)
     }
   else
     {
-      w->pixel_height = XFASTINT (w->new_pixel);
+      w->pixel_height = XFIXNAT (w->new_pixel);
       w->total_lines = w->pixel_height / unit;
       if (NUMBERP (w->new_normal))
 	wset_normal_lines (w, w->new_normal);
@@ -4076,12 +4112,12 @@ window_resize_apply_total (struct window *w, bool horflag)
      parent window has been set *before*.  */
   if (horflag)
     {
-      w->total_cols = XFASTINT (w->new_total);
+      w->total_cols = XFIXNAT (w->new_total);
       edge = w->left_col;
     }
   else
     {
-      w->total_lines = XFASTINT (w->new_total);
+      w->total_lines = XFIXNAT (w->new_total);
       edge = w->top_line;
     }
 
@@ -4149,7 +4185,7 @@ be applied on the Elisp level.  */)
   bool horflag = !NILP (horizontal);
 
   if (!window_resize_check (r, horflag)
-      || (XINT (r->new_pixel)
+      || (XFIXNUM (r->new_pixel)
 	  != (horflag ? r->pixel_width : r->pixel_height)))
     return Qnil;
 
@@ -4193,10 +4229,10 @@ values.  */)
       if (NILP (horizontal))
 	{
 	  m->top_line = r->top_line + r->total_lines;
-	  m->total_lines = XFASTINT (m->new_total);
+	  m->total_lines = XFIXNAT (m->new_total);
 	}
       else
-	m->total_cols = XFASTINT (m->new_total);
+	m->total_cols = XFIXNAT (m->new_total);
     }
 
   unblock_input ();
@@ -4286,7 +4322,7 @@ resize_frame_windows (struct frame *f, int size, bool horflag, bool pixelwise)
       resize_root_window (root, delta, horflag ? Qt : Qnil, Qnil,
 			  pixelwise ? Qt : Qnil);
       if (window_resize_check (r, horflag)
-	  && new_pixel_size == XINT (r->new_pixel))
+	  && new_pixel_size == XFIXNUM (r->new_pixel))
 	{
 	  window_resize_apply (r, horflag);
 	  window_pixel_to_total (r->frame, horflag ? Qt : Qnil);
@@ -4297,7 +4333,7 @@ resize_frame_windows (struct frame *f, int size, bool horflag, bool pixelwise)
 	  resize_root_window (root, delta, horflag ? Qt : Qnil, Qt,
 			      pixelwise ? Qt : Qnil);
 	  if (window_resize_check (r, horflag)
-	      && new_pixel_size == XINT (r->new_pixel))
+	      && new_pixel_size == XFIXNUM (r->new_pixel))
 	    {
 	      window_resize_apply (r, horflag);
 	      window_pixel_to_total (r->frame, horflag ? Qt : Qnil);
@@ -4369,9 +4405,9 @@ set correctly.  See the code of `split-window' for how this is done.  */)
   frame = WINDOW_FRAME (o);
   f = XFRAME (frame);
 
-  CHECK_NUMBER (pixel_size);
+  CHECK_FIXNUM (pixel_size);
   EMACS_INT total_size
-    = XINT (pixel_size) / (horflag
+    = XFIXNUM (pixel_size) / (horflag
 			   ? FRAME_COLUMN_WIDTH (f)
 			   : FRAME_LINE_HEIGHT (f));
 
@@ -4406,19 +4442,19 @@ set correctly.  See the code of `split-window' for how this is done.  */)
       p = XWINDOW (o->parent);
       /* Temporarily pretend we split the parent window.  */
       wset_new_pixel
-	(p, make_number ((horflag ? p->pixel_width : p->pixel_height)
-			 - XINT (pixel_size)));
+	(p, make_fixnum ((horflag ? p->pixel_width : p->pixel_height)
+			 - XFIXNUM (pixel_size)));
       if (!window_resize_check (p, horflag))
 	error ("Window sizes don't fit");
       else
 	/* Undo the temporary pretension.  */
-	wset_new_pixel (p, make_number (horflag ? p->pixel_width : p->pixel_height));
+	wset_new_pixel (p, make_fixnum (horflag ? p->pixel_width : p->pixel_height));
     }
   else
     {
       if (!window_resize_check (o, horflag))
 	error ("Resizing old window failed");
-      else if (XINT (pixel_size) + XINT (o->new_pixel)
+      else if (XFIXNUM (pixel_size) + XFIXNUM (o->new_pixel)
 	       != (horflag ? o->pixel_width : o->pixel_height))
 	error ("Sum of sizes of old and new window don't fit");
     }
@@ -4440,9 +4476,9 @@ set correctly.  See the code of `split-window' for how this is done.  */)
 	wset_combination_limit (p, Qt);
       /* These get applied below.  */
       wset_new_pixel
-	(p, make_number (horflag ? o->pixel_width : o->pixel_height));
+	(p, make_fixnum (horflag ? o->pixel_width : o->pixel_height));
       wset_new_total
-	(p, make_number (horflag ? o->total_cols : o->total_lines));
+	(p, make_fixnum (horflag ? o->total_cols : o->total_lines));
       wset_new_normal (p, new_normal);
     }
   else
@@ -4511,10 +4547,10 @@ set correctly.  See the code of `split-window' for how this is done.  */)
   while (c)
     {
       if (c != n)
-	sum = sum + XINT (c->new_total);
+	sum = sum + XFIXNUM (c->new_total);
       c = NILP (c->next) ? 0 : XWINDOW (c->next);
     }
-  wset_new_total (n, make_number ((horflag
+  wset_new_total (n, make_fixnum ((horflag
 				   ? p->total_cols
 				   : p->total_lines)
 				  - sum));
@@ -4596,7 +4632,7 @@ Signal an error when WINDOW is the only window on its frame.  */)
     }
 
   if (window_resize_check (r, horflag)
-      && (XINT (r->new_pixel)
+      && (XFIXNUM (r->new_pixel)
 	  == (horflag ? r->pixel_width : r->pixel_height)))
     /* We can delete WINDOW now.  */
     {
@@ -4727,20 +4763,20 @@ grow_mini_window (struct window *w, int delta, bool pixelwise)
       root = FRAME_ROOT_WINDOW (f);
       r = XWINDOW (root);
       height = call3 (Qwindow__resize_root_window_vertically,
-		      root, make_number (- delta), pixelwise ? Qt : Qnil);
-      if (INTEGERP (height) && window_resize_check (r, false))
+		      root, make_fixnum (- delta), pixelwise ? Qt : Qnil);
+      if (FIXNUMP (height) && window_resize_check (r, false))
 	{
 	  block_input ();
 	  window_resize_apply (r, false);
 
 	  if (pixelwise)
 	    {
-	      pixel_height = min (-XINT (height), INT_MAX - w->pixel_height);
+	      pixel_height = min (-XFIXNUM (height), INT_MAX - w->pixel_height);
 	      line_height = pixel_height / FRAME_LINE_HEIGHT (f);
 	    }
 	  else
 	    {
-	      line_height = min (-XINT (height),
+	      line_height = min (-XFIXNUM (height),
 				 ((INT_MAX - w->pixel_height)
 				  / FRAME_LINE_HEIGHT (f)));
 	      pixel_height = line_height * FRAME_LINE_HEIGHT (f);
@@ -4784,9 +4820,9 @@ shrink_mini_window (struct window *w, bool pixelwise)
       root = FRAME_ROOT_WINDOW (f);
       r = XWINDOW (root);
       delta = call3 (Qwindow__resize_root_window_vertically,
-		     root, make_number (height - unit),
+		     root, make_fixnum (height - unit),
 		     pixelwise ? Qt : Qnil);
-      if (INTEGERP (delta) && window_resize_check (r, false))
+      if (FIXNUMP (delta) && window_resize_check (r, false))
 	{
 	  block_input ();
 	  window_resize_apply (r, false);
@@ -4831,13 +4867,13 @@ DEFUN ("resize-mini-window-internal", Fresize_mini_window_internal, Sresize_mini
   r = XWINDOW (FRAME_ROOT_WINDOW (f));
   height = r->pixel_height + w->pixel_height;
   if (window_resize_check (r, false)
-      && XINT (w->new_pixel) > 0
-      && height == XINT (r->new_pixel) + XINT (w->new_pixel))
+      && XFIXNUM (w->new_pixel) > 0
+      && height == XFIXNUM (r->new_pixel) + XFIXNUM (w->new_pixel))
     {
       block_input ();
       window_resize_apply (r, false);
 
-      w->pixel_height = XFASTINT (w->new_pixel);
+      w->pixel_height = XFIXNAT (w->new_pixel);
       w->total_lines = w->pixel_height / FRAME_LINE_HEIGHT (f);
       w->pixel_top = r->pixel_top + r->pixel_height;
       w->top_line = r->top_line + r->total_lines;
@@ -5105,7 +5141,7 @@ window_scroll_pixel_based (Lisp_Object window, int n, bool whole, bool noerror)
 	      if (w->vscroll < 0 && rtop > 0)
 		{
 		  px = max (0, -w->vscroll - min (rtop, -dy));
-		  Fset_window_vscroll (window, make_number (px), Qt);
+		  Fset_window_vscroll (window, make_fixnum (px), Qt);
 		  return;
 		}
 	    }
@@ -5115,7 +5151,7 @@ window_scroll_pixel_based (Lisp_Object window, int n, bool whole, bool noerror)
 	      if (rbot > 0 && (w->vscroll < 0 || vpos == 0))
 		{
 		  px = max (0, -w->vscroll + min (rbot, dy));
-		  Fset_window_vscroll (window, make_number (px), Qt);
+		  Fset_window_vscroll (window, make_fixnum (px), Qt);
 		  return;
 		}
 
@@ -5124,14 +5160,14 @@ window_scroll_pixel_based (Lisp_Object window, int n, bool whole, bool noerror)
 		{
 		  ptrdiff_t spos;
 
-		  Fset_window_vscroll (window, make_number (0), Qt);
+		  Fset_window_vscroll (window, make_fixnum (0), Qt);
 		  /* If there are other text lines above the current row,
 		     move window start to current row.  Else to next row. */
 		  if (rbot > 0)
-		    spos = XINT (Fline_beginning_position (Qnil));
+		    spos = XFIXNUM (Fline_beginning_position (Qnil));
 		  else
-		    spos = min (XINT (Fline_end_position (Qnil)) + 1, ZV);
-		  set_marker_restricted (w->start, make_number (spos),
+		    spos = min (XFIXNUM (Fline_end_position (Qnil)) + 1, ZV);
+		  set_marker_restricted (w->start, make_fixnum (spos),
 					 w->contents);
 		  w->start_at_line_beg = true;
 		  wset_update_mode_line (w);
@@ -5143,7 +5179,7 @@ window_scroll_pixel_based (Lisp_Object window, int n, bool whole, bool noerror)
 	    }
 	}
       /* Cancel previous vscroll.  */
-      Fset_window_vscroll (window, make_number (0), Qt);
+      Fset_window_vscroll (window, make_fixnum (0), Qt);
     }
 
   itdata = bidi_shelve_cache ();
@@ -5448,7 +5484,7 @@ window_scroll_pixel_based (Lisp_Object window, int n, bool whole, bool noerror)
   if (adjust_old_pointm)
     Fset_marker (w->old_pointm,
 		 ((w == XWINDOW (selected_window))
-		  ? make_number (BUF_PT (XBUFFER (w->contents)))
+		  ? make_fixnum (BUF_PT (XBUFFER (w->contents)))
 		  : Fmarker_position (w->pointm)),
 		 w->contents);
 }
@@ -5497,8 +5533,8 @@ window_scroll_line_based (Lisp_Object window, int n, bool whole, bool noerror)
 	  window_scroll_preserve_hpos = posit.hpos + w->hscroll;
 	}
 
-      original_pos = Fcons (make_number (window_scroll_preserve_hpos),
-			    make_number (window_scroll_preserve_vpos));
+      original_pos = Fcons (make_fixnum (window_scroll_preserve_hpos),
+			    make_fixnum (window_scroll_preserve_vpos));
     }
 
   XSETFASTINT (tem, PT);
@@ -5506,14 +5542,14 @@ window_scroll_line_based (Lisp_Object window, int n, bool whole, bool noerror)
 
   if (NILP (tem))
     {
-      Fvertical_motion (make_number (- (ht / 2)), window, Qnil);
+      Fvertical_motion (make_fixnum (- (ht / 2)), window, Qnil);
       startpos = PT;
       startbyte = PT_BYTE;
     }
 
   SET_PT_BOTH (startpos, startbyte);
   lose = n < 0 && PT == BEGV;
-  Fvertical_motion (make_number (n), window, Qnil);
+  Fvertical_motion (make_fixnum (n), window, Qnil);
   pos = PT;
   pos_byte = PT_BYTE;
   bolp = Fbolp ();
@@ -5555,7 +5591,7 @@ window_scroll_line_based (Lisp_Object window, int n, bool whole, bool noerror)
 	  if (this_scroll_margin > 0)
 	    {
 	      SET_PT_BOTH (pos, pos_byte);
-	      Fvertical_motion (make_number (this_scroll_margin), window, Qnil);
+	      Fvertical_motion (make_fixnum (this_scroll_margin), window, Qnil);
 	      top_margin = PT;
 	    }
 	  else
@@ -5574,8 +5610,8 @@ window_scroll_line_based (Lisp_Object window, int n, bool whole, bool noerror)
 	      else if (window_scroll_preserve_vpos
 		       >= w->total_lines - this_scroll_margin)
 		nlines = w->total_lines - this_scroll_margin - 1;
-	      Fvertical_motion (Fcons (make_number (window_scroll_preserve_hpos),
-				       make_number (nlines)), window, Qnil);
+	      Fvertical_motion (Fcons (make_fixnum (window_scroll_preserve_hpos),
+				       make_fixnum (nlines)), window, Qnil);
 	    }
 	  else
 	    SET_PT (top_margin);
@@ -5587,9 +5623,9 @@ window_scroll_line_based (Lisp_Object window, int n, bool whole, bool noerror)
 	  /* If we scrolled backward, put point near the end of the window
 	     but not within the scroll margin.  */
 	  SET_PT_BOTH (pos, pos_byte);
-	  tem = Fvertical_motion (make_number (ht - this_scroll_margin), window,
+	  tem = Fvertical_motion (make_fixnum (ht - this_scroll_margin), window,
 				  Qnil);
-	  if (XFASTINT (tem) == ht - this_scroll_margin)
+	  if (XFIXNAT (tem) == ht - this_scroll_margin)
 	    bottom_margin = PT;
 	  else
 	    bottom_margin = PT + 1;
@@ -5609,11 +5645,11 @@ window_scroll_line_based (Lisp_Object window, int n, bool whole, bool noerror)
 		  else if (window_scroll_preserve_vpos
 			   >= ht - this_scroll_margin)
 		    nlines = ht - this_scroll_margin - 1;
-		  Fvertical_motion (Fcons (make_number (window_scroll_preserve_hpos),
-					   make_number (nlines)), window, Qnil);
+		  Fvertical_motion (Fcons (make_fixnum (window_scroll_preserve_hpos),
+					   make_fixnum (nlines)), window, Qnil);
 		}
 	      else
-		Fvertical_motion (make_number (-1), window, Qnil);
+		Fvertical_motion (make_fixnum (-1), window, Qnil);
 	    }
 	}
     }
@@ -5628,7 +5664,7 @@ window_scroll_line_based (Lisp_Object window, int n, bool whole, bool noerror)
   if (adjust_old_pointm)
     Fset_marker (w->old_pointm,
 		 ((w == XWINDOW (selected_window))
-		  ? make_number (BUF_PT (XBUFFER (w->contents)))
+		  ? make_fixnum (BUF_PT (XBUFFER (w->contents)))
 		  : Fmarker_position (w->pointm)),
 		 w->contents);
 }
@@ -5652,12 +5688,17 @@ scroll_command (Lisp_Object window, Lisp_Object n, int direction)
   w = XWINDOW (window);
   other_window = ! EQ (window, selected_window);
 
-  /* If given window's buffer isn't current, make it current for
-     the moment.  But don't screw up if window_scroll gets an error.  */
-  if (XBUFFER (w->contents) != current_buffer)
+  /* If given window's buffer isn't current, make it current for the
+     moment.  If the window's buffer is the same, but it is not the
+     selected window, we need to save-excursion to avoid affecting
+     point in the selected window (which would cause the selected
+     window to scroll).  Don't screw up if window_scroll gets an
+     error.  */
+  if (other_window || XBUFFER (w->contents) != current_buffer)
     {
       record_unwind_protect_excursion ();
-      Fset_buffer (w->contents);
+      if (XBUFFER (w->contents) != current_buffer)
+	Fset_buffer (w->contents);
     }
 
   if (other_window)
@@ -5675,7 +5716,7 @@ scroll_command (Lisp_Object window, Lisp_Object n, int direction)
   else
     {
       n = Fprefix_numeric_value (n);
-      window_scroll (window, XINT (n) * direction, false, false);
+      window_scroll (window, XFIXNUM (n) * direction, false, false);
     }
 
   if (other_window)
@@ -5771,8 +5812,7 @@ which see.  */)
 {
   ptrdiff_t count = SPECPDL_INDEX ();
   scroll_command (Fother_window_for_scrolling (), arg, 1);
-  unbind_to (count, Qnil);
-  return Qnil;
+  return unbind_to (count, Qnil);
 }
 
 DEFUN ("scroll-other-window-down", Fscroll_other_window_down,
@@ -5783,8 +5823,7 @@ For more details, see the documentation for `scroll-other-window'.  */)
 {
   ptrdiff_t count = SPECPDL_INDEX ();
   scroll_command (Fother_window_for_scrolling (), arg, -1);
-  unbind_to (count, Qnil);
-  return Qnil;
+  return unbind_to (count, Qnil);
 }
 
 DEFUN ("scroll-left", Fscroll_left, Sscroll_left, 0, 2, "^P\np",
@@ -5801,7 +5840,7 @@ by this function.  This happens in an interactive call.  */)
   struct window *w = XWINDOW (selected_window);
   EMACS_INT requested_arg = (NILP (arg)
 			     ? window_body_width (w, 0) - 2
-			     : XINT (Fprefix_numeric_value (arg)));
+			     : XFIXNUM (Fprefix_numeric_value (arg)));
   Lisp_Object result = set_window_hscroll (w, w->hscroll + requested_arg);
 
   if (!NILP (set_minimum))
@@ -5826,7 +5865,7 @@ by this function.  This happens in an interactive call.  */)
   struct window *w = XWINDOW (selected_window);
   EMACS_INT requested_arg = (NILP (arg)
 			     ? window_body_width (w, 0) - 2
-			     : XINT (Fprefix_numeric_value (arg)));
+			     : XFIXNUM (Fprefix_numeric_value (arg)));
   Lisp_Object result = set_window_hscroll (w, w->hscroll - requested_arg);
 
   if (!NILP (set_minimum))
@@ -5898,22 +5937,23 @@ displayed_window_lines (struct window *w)
 }
 
 
-DEFUN ("recenter", Frecenter, Srecenter, 0, 1, "P",
+DEFUN ("recenter", Frecenter, Srecenter, 0, 2, "P\np",
        doc: /* Center point in selected window and maybe redisplay frame.
 With a numeric prefix argument ARG, recenter putting point on screen line ARG
 relative to the selected window.  If ARG is negative, it counts up from the
 bottom of the window.  (ARG should be less than the height of the window.)
 
-If ARG is omitted or nil, then recenter with point on the middle line of
-the selected window; if the variable `recenter-redisplay' is non-nil,
-also erase the entire frame and redraw it (when `auto-resize-tool-bars'
-is set to `grow-only', this resets the tool-bar's height to the minimum
-height needed); if `recenter-redisplay' has the special value `tty',
-then only tty frames are redrawn.
+If ARG is omitted or nil, then recenter with point on the middle line
+of the selected window; if REDISPLAY & `recenter-redisplay' are
+non-nil, also erase the entire frame and redraw it (when
+`auto-resize-tool-bars' is set to `grow-only', this resets the
+tool-bar's height to the minimum height needed); if
+`recenter-redisplay' has the special value `tty', then only tty frames
+are redrawn.  Interactively, REDISPLAY is always non-nil.
 
 Just C-u as prefix means put point in the center of the window
 and redisplay normally--don't erase and redraw the frame.  */)
-  (register Lisp_Object arg)
+  (Lisp_Object arg, Lisp_Object redisplay)
 {
   struct window *w = XWINDOW (selected_window);
   struct buffer *buf = XBUFFER (w->contents);
@@ -5933,7 +5973,8 @@ and redisplay normally--don't erase and redraw the frame.  */)
 
   if (NILP (arg))
     {
-      if (!NILP (Vrecenter_redisplay)
+      if (!NILP (redisplay)
+	  && !NILP (Vrecenter_redisplay)
 	  && (!EQ (Vrecenter_redisplay, Qtty)
 	      || !NILP (Ftty_type (selected_frame))))
 	{
@@ -5956,8 +5997,8 @@ and redisplay normally--don't erase and redraw the frame.  */)
   else
     {
       arg = Fprefix_numeric_value (arg);
-      CHECK_NUMBER (arg);
-      iarg = XINT (arg);
+      CHECK_FIXNUM (arg);
+      iarg = XFIXNUM (arg);
     }
 
   /* Do this after making BUF current
@@ -6134,10 +6175,10 @@ pixels.  */)
   struct window *w = decode_live_window (window);
 
   if (NILP (pixelwise))
-    return make_number (window_box_width (w, TEXT_AREA)
+    return make_fixnum (window_box_width (w, TEXT_AREA)
 			/ FRAME_COLUMN_WIDTH (WINDOW_XFRAME (w)));
   else
-    return make_number (window_box_width (w, TEXT_AREA));
+    return make_fixnum (window_box_width (w, TEXT_AREA));
 }
 
 DEFUN ("window-text-height", Fwindow_text_height, Swindow_text_height,
@@ -6155,10 +6196,10 @@ pixels.  */)
   struct window *w = decode_live_window (window);
 
   if (NILP (pixelwise))
-    return make_number (window_box_height (w)
+    return make_fixnum (window_box_height (w)
 			/ FRAME_LINE_HEIGHT (WINDOW_XFRAME (w)));
   else
-    return make_number (window_box_height (w));
+    return make_fixnum (window_box_height (w));
 }
 
 DEFUN ("move-to-window-line", Fmove_to_window_line, Smove_to_window_line,
@@ -6191,7 +6232,7 @@ from the top of the window.  */)
   if (start < BEGV || start > ZV)
     {
       int height = window_internal_height (w);
-      Fvertical_motion (make_number (- (height / 2)), window, Qnil);
+      Fvertical_motion (make_fixnum (- (height / 2)), window, Qnil);
       set_marker_both (w->start, w->contents, PT, PT_BYTE);
       w->start_at_line_beg = !NILP (Fbolp ());
       w->force_start = true;
@@ -6205,7 +6246,7 @@ from the top of the window.  */)
     XSETFASTINT (arg, lines / 2);
   else
     {
-      EMACS_INT iarg = XINT (Fprefix_numeric_value (arg));
+      EMACS_INT iarg = XFIXNUM (Fprefix_numeric_value (arg));
 
       if (iarg < 0)
 	iarg = iarg + lines;
@@ -6223,12 +6264,12 @@ from the top of the window.  */)
       iarg = min (iarg, lines - this_scroll_margin - 1);
 #endif
 
-      arg = make_number (iarg);
+      arg = make_fixnum (iarg);
     }
 
   /* Skip past a partially visible first line.  */
   if (w->vscroll)
-    XSETINT (arg, XINT (arg) + 1);
+    XSETINT (arg, XFIXNUM (arg) + 1);
 
   return Fvertical_motion (arg, window, Qnil);
 }
@@ -6264,7 +6305,7 @@ struct save_window_data
     /* These are currently unused.  We need them as soon as we convert
        to pixels.  */
     int frame_menu_bar_height, frame_tool_bar_height;
-  };
+  } GCALIGNED_STRUCT;
 
 /* This is saved as a Lisp_Vector.  */
 struct saved_window
@@ -6466,14 +6507,14 @@ the return value is nil.  Otherwise the value is t.  */)
 
 	  if (!NILP (p->parent))
 	    wset_parent
-	      (w, SAVED_WINDOW_N (saved_windows, XFASTINT (p->parent))->window);
+	      (w, SAVED_WINDOW_N (saved_windows, XFIXNAT (p->parent))->window);
 	  else
 	    wset_parent (w, Qnil);
 
 	  if (!NILP (p->prev))
 	    {
 	      wset_prev
-		(w, SAVED_WINDOW_N (saved_windows, XFASTINT (p->prev))->window);
+		(w, SAVED_WINDOW_N (saved_windows, XFIXNAT (p->prev))->window);
 	      wset_next (XWINDOW (w->prev), p->window);
 	    }
 	  else
@@ -6481,7 +6522,7 @@ the return value is nil.  Otherwise the value is t.  */)
 	      wset_prev (w, Qnil);
 	      if (!NILP (w->parent))
 		wset_combination (XWINDOW (w->parent),
-				  (XINT (p->total_cols)
+				  (XFIXNUM (p->total_cols)
 				   != XWINDOW (w->parent)->total_cols),
 				  p->window);
 	    }
@@ -6489,32 +6530,32 @@ the return value is nil.  Otherwise the value is t.  */)
 	  /* If we squirreled away the buffer, restore it now.  */
 	  if (BUFFERP (w->combination_limit))
 	    wset_buffer (w, w->combination_limit);
-	  w->pixel_left = XFASTINT (p->pixel_left);
-	  w->pixel_top = XFASTINT (p->pixel_top);
-	  w->pixel_width = XFASTINT (p->pixel_width);
-	  w->pixel_height = XFASTINT (p->pixel_height);
+	  w->pixel_left = XFIXNAT (p->pixel_left);
+	  w->pixel_top = XFIXNAT (p->pixel_top);
+	  w->pixel_width = XFIXNAT (p->pixel_width);
+	  w->pixel_height = XFIXNAT (p->pixel_height);
 	  w->pixel_width_before_size_change
-	    = XFASTINT (p->pixel_width_before_size_change);
+	    = XFIXNAT (p->pixel_width_before_size_change);
 	  w->pixel_height_before_size_change
-	    = XFASTINT (p->pixel_height_before_size_change);
-	  w->left_col = XFASTINT (p->left_col);
-	  w->top_line = XFASTINT (p->top_line);
-	  w->total_cols = XFASTINT (p->total_cols);
-	  w->total_lines = XFASTINT (p->total_lines);
+	    = XFIXNAT (p->pixel_height_before_size_change);
+	  w->left_col = XFIXNAT (p->left_col);
+	  w->top_line = XFIXNAT (p->top_line);
+	  w->total_cols = XFIXNAT (p->total_cols);
+	  w->total_lines = XFIXNAT (p->total_lines);
 	  wset_normal_cols (w, p->normal_cols);
 	  wset_normal_lines (w, p->normal_lines);
-	  w->hscroll = XFASTINT (p->hscroll);
+	  w->hscroll = XFIXNAT (p->hscroll);
 	  w->suspend_auto_hscroll = !NILP (p->suspend_auto_hscroll);
-	  w->min_hscroll = XFASTINT (p->min_hscroll);
-	  w->hscroll_whole = XFASTINT (p->hscroll_whole);
+	  w->min_hscroll = XFIXNAT (p->min_hscroll);
+	  w->hscroll_whole = XFIXNAT (p->hscroll_whole);
 	  wset_display_table (w, p->display_table);
-	  w->left_margin_cols = XINT (p->left_margin_cols);
-	  w->right_margin_cols = XINT (p->right_margin_cols);
-	  w->left_fringe_width = XINT (p->left_fringe_width);
-	  w->right_fringe_width = XINT (p->right_fringe_width);
+	  w->left_margin_cols = XFIXNUM (p->left_margin_cols);
+	  w->right_margin_cols = XFIXNUM (p->right_margin_cols);
+	  w->left_fringe_width = XFIXNUM (p->left_fringe_width);
+	  w->right_fringe_width = XFIXNUM (p->right_fringe_width);
 	  w->fringes_outside_margins = !NILP (p->fringes_outside_margins);
-	  w->scroll_bar_width = XINT (p->scroll_bar_width);
-	  w->scroll_bar_height = XINT (p->scroll_bar_height);
+	  w->scroll_bar_width = XFIXNUM (p->scroll_bar_width);
+	  w->scroll_bar_height = XFIXNUM (p->scroll_bar_height);
 	  wset_vertical_scroll_bar_type (w, p->vertical_scroll_bar_type);
 	  wset_horizontal_scroll_bar_type (w, p->horizontal_scroll_bar_type);
 	  wset_dedicated (w, p->dedicated);
@@ -6606,7 +6647,7 @@ the return value is nil.  Otherwise the value is t.  */)
 	 current when the window configuration was saved.  */
       if (EQ (XWINDOW (data->current_window)->contents, new_current_buffer))
 	set_marker_restricted (XWINDOW (data->current_window)->pointm,
-			       make_number (old_point),
+			       make_fixnum (old_point),
 			       XWINDOW (data->current_window)->contents);
 
       /* In the following call to select_window, prevent "swapping out
@@ -6710,7 +6751,7 @@ the return value is nil.  Otherwise the value is t.  */)
 	 the "normal" frame's selected window and that window *does*
 	 show new_current_buffer.  */
       if (!EQ (XWINDOW (selected_window)->contents, new_current_buffer))
-	Fgoto_char (make_number (old_point));
+	Fgoto_char (make_fixnum (old_point));
     }
 
   Vminibuf_scroll_window = data->minibuf_scroll_window;
@@ -6845,21 +6886,21 @@ save_window_save (Lisp_Object window, struct Lisp_Vector *vector, ptrdiff_t i)
       p = SAVED_WINDOW_N (vector, i);
       w = XWINDOW (window);
 
-      wset_temslot (w, make_number (i)); i++;
+      wset_temslot (w, make_fixnum (i)); i++;
       p->window = window;
       p->buffer = (WINDOW_LEAF_P (w) ? w->contents : Qnil);
-      p->pixel_left = make_number (w->pixel_left);
-      p->pixel_top = make_number (w->pixel_top);
-      p->pixel_width = make_number (w->pixel_width);
-      p->pixel_height = make_number (w->pixel_height);
+      p->pixel_left = make_fixnum (w->pixel_left);
+      p->pixel_top = make_fixnum (w->pixel_top);
+      p->pixel_width = make_fixnum (w->pixel_width);
+      p->pixel_height = make_fixnum (w->pixel_height);
       p->pixel_width_before_size_change
-	= make_number (w->pixel_width_before_size_change);
+	= make_fixnum (w->pixel_width_before_size_change);
       p->pixel_height_before_size_change
-	= make_number (w->pixel_height_before_size_change);
-      p->left_col = make_number (w->left_col);
-      p->top_line = make_number (w->top_line);
-      p->total_cols = make_number (w->total_cols);
-      p->total_lines = make_number (w->total_lines);
+	= make_fixnum (w->pixel_height_before_size_change);
+      p->left_col = make_fixnum (w->left_col);
+      p->top_line = make_fixnum (w->top_line);
+      p->total_cols = make_fixnum (w->total_cols);
+      p->total_lines = make_fixnum (w->total_lines);
       p->normal_cols = w->normal_cols;
       p->normal_lines = w->normal_lines;
       XSETFASTINT (p->hscroll, w->hscroll);
@@ -6867,13 +6908,13 @@ save_window_save (Lisp_Object window, struct Lisp_Vector *vector, ptrdiff_t i)
       XSETFASTINT (p->min_hscroll, w->min_hscroll);
       XSETFASTINT (p->hscroll_whole, w->hscroll_whole);
       p->display_table = w->display_table;
-      p->left_margin_cols = make_number (w->left_margin_cols);
-      p->right_margin_cols = make_number (w->right_margin_cols);
-      p->left_fringe_width = make_number (w->left_fringe_width);
-      p->right_fringe_width = make_number (w->right_fringe_width);
+      p->left_margin_cols = make_fixnum (w->left_margin_cols);
+      p->right_margin_cols = make_fixnum (w->right_margin_cols);
+      p->left_fringe_width = make_fixnum (w->left_fringe_width);
+      p->right_fringe_width = make_fixnum (w->right_fringe_width);
       p->fringes_outside_margins = w->fringes_outside_margins ? Qt : Qnil;
-      p->scroll_bar_width = make_number (w->scroll_bar_width);
-      p->scroll_bar_height = make_number (w->scroll_bar_height);
+      p->scroll_bar_width = make_fixnum (w->scroll_bar_width);
+      p->scroll_bar_height = make_fixnum (w->scroll_bar_height);
       p->vertical_scroll_bar_type = w->vertical_scroll_bar_type;
       p->horizontal_scroll_bar_type = w->horizontal_scroll_bar_type;
       p->dedicated = w->dedicated;
@@ -7008,7 +7049,7 @@ saved by this function.  */)
   data->saved_windows = tem;
   for (i = 0; i < n_windows; i++)
     ASET (tem, i,
-	  Fmake_vector (make_number (VECSIZE (struct saved_window)), Qnil));
+	  Fmake_vector (make_fixnum (VECSIZE (struct saved_window)), Qnil));
   save_window_save (FRAME_ROOT_WINDOW (f), XVECTOR (tem), 0);
   XSETWINDOW_CONFIGURATION (tem, data);
   return (tem);
@@ -7037,7 +7078,7 @@ extract_dimension (Lisp_Object dimension)
   if (NILP (dimension))
     return -1;
   CHECK_RANGED_INTEGER (dimension, 0, INT_MAX);
-  return XINT (dimension);
+  return XFIXNUM (dimension);
 }
 
 static struct window *
@@ -7100,9 +7141,9 @@ as nil.  */)
 {
   struct window *w = decode_live_window (window);
   return Fcons (w->left_margin_cols
-		? make_number (w->left_margin_cols) : Qnil,
+		? make_fixnum (w->left_margin_cols) : Qnil,
 		w->right_margin_cols
-		? make_number (w->right_margin_cols) : Qnil);
+		? make_fixnum (w->right_margin_cols) : Qnil);
 }
 
 
@@ -7181,8 +7222,8 @@ Value is a list of the form (LEFT-WIDTH RIGHT-WIDTH OUTSIDE-MARGINS).  */)
 {
   struct window *w = decode_live_window (window);
 
-  return list3 (make_number (WINDOW_LEFT_FRINGE_WIDTH (w)),
-		make_number (WINDOW_RIGHT_FRINGE_WIDTH (w)),
+  return list3 (make_fixnum (WINDOW_LEFT_FRINGE_WIDTH (w)),
+		make_fixnum (WINDOW_RIGHT_FRINGE_WIDTH (w)),
 		WINDOW_HAS_FRINGES_OUTSIDE_MARGINS (w) ? Qt : Qnil);
 }
 
@@ -7304,14 +7345,14 @@ value.  */)
   struct window *w = decode_live_window (window);
 
   return Fcons (((w->scroll_bar_width >= 0)
-		 ? make_number (w->scroll_bar_width)
+		 ? make_fixnum (w->scroll_bar_width)
 		 : Qnil),
-		list5 (make_number (WINDOW_SCROLL_BAR_COLS (w)),
+		list5 (make_fixnum (WINDOW_SCROLL_BAR_COLS (w)),
 		       w->vertical_scroll_bar_type,
 		       ((w->scroll_bar_height >= 0)
-			? make_number (w->scroll_bar_height)
+			? make_fixnum (w->scroll_bar_height)
 			: Qnil),
-		       make_number (WINDOW_SCROLL_BAR_LINES (w)),
+		       make_fixnum (WINDOW_SCROLL_BAR_LINES (w)),
 		       w->horizontal_scroll_bar_type));
 }
 
@@ -7333,9 +7374,9 @@ optional second arg PIXELS-P means value is measured in pixels.  */)
   if (FRAME_WINDOW_P (f))
     result = (NILP (pixels_p)
 	      ? FRAME_CANON_Y_FROM_PIXEL_Y (f, -w->vscroll)
-	      : make_number (-w->vscroll));
+	      : make_fixnum (-w->vscroll));
   else
-    result = make_number (0);
+    result = make_fixnum (0);
   return result;
 }
 
@@ -7355,7 +7396,7 @@ If PIXELS-P is non-nil, the return value is VSCROLL.  */)
   struct window *w = decode_live_window (window);
   struct frame *f = XFRAME (w->frame);
 
-  CHECK_NUMBER_OR_FLOAT (vscroll);
+  CHECK_NUMBER (vscroll);
 
   if (FRAME_WINDOW_P (f))
     {
@@ -7552,6 +7593,7 @@ syms_of_window (void)
   Fput (Qscroll_down, Qscroll_command, Qt);
 
   DEFSYM (Qwindow_configuration_change_hook, "window-configuration-change-hook");
+  DEFSYM (Qwindow_size_change_functions, "window-size-change-functions");
   DEFSYM (Qwindowp, "windowp");
   DEFSYM (Qwindow_configuration_p, "window-configuration-p");
   DEFSYM (Qwindow_live_p, "window-live-p");

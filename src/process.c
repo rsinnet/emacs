@@ -252,7 +252,7 @@ static EMACS_INT update_tick;
 # define HAVE_SEQPACKET
 #endif
 
-#define READ_OUTPUT_DELAY_INCREMENT (TIMESPEC_RESOLUTION / 100)
+#define READ_OUTPUT_DELAY_INCREMENT (TIMESPEC_HZ / 100)
 #define READ_OUTPUT_DELAY_MAX       (READ_OUTPUT_DELAY_INCREMENT * 5)
 #define READ_OUTPUT_DELAY_MAX_MAX   (READ_OUTPUT_DELAY_INCREMENT * 7)
 
@@ -684,12 +684,12 @@ static Lisp_Object
 status_convert (int w)
 {
   if (WIFSTOPPED (w))
-    return Fcons (Qstop, Fcons (make_number (WSTOPSIG (w)), Qnil));
+    return Fcons (Qstop, Fcons (make_fixnum (WSTOPSIG (w)), Qnil));
   else if (WIFEXITED (w))
-    return Fcons (Qexit, Fcons (make_number (WEXITSTATUS (w)),
+    return Fcons (Qexit, Fcons (make_fixnum (WEXITSTATUS (w)),
 				WCOREDUMP (w) ? Qt : Qnil));
   else if (WIFSIGNALED (w))
-    return Fcons (Qsignal, Fcons (make_number (WTERMSIG (w)),
+    return Fcons (Qsignal, Fcons (make_fixnum (WTERMSIG (w)),
 				  WCOREDUMP (w) ? Qt : Qnil));
   else
     return Qrun;
@@ -718,7 +718,7 @@ decode_status (Lisp_Object l, Lisp_Object *symbol, Lisp_Object *code,
   if (SYMBOLP (l))
     {
       *symbol = l;
-      *code = make_number (0);
+      *code = make_fixnum (0);
       *coredump = 0;
     }
   else
@@ -747,7 +747,7 @@ status_message (struct Lisp_Process *p)
     {
       char const *signame;
       synchronize_system_messages_locale ();
-      signame = strsignal (XFASTINT (code));
+      signame = strsignal (XFIXNAT (code));
       if (signame == 0)
 	string = build_string ("unknown");
       else
@@ -761,7 +761,7 @@ status_message (struct Lisp_Process *p)
 	  c1 = STRING_CHAR (SDATA (string));
 	  c2 = downcase (c1);
 	  if (c1 != c2)
-	    Faset (string, make_number (0), make_number (c2));
+	    Faset (string, make_fixnum (0), make_fixnum (c2));
 	}
       AUTO_STRING (suffix, coredump ? " (core dumped)\n" : "\n");
       return concat2 (string, suffix);
@@ -769,10 +769,10 @@ status_message (struct Lisp_Process *p)
   else if (EQ (symbol, Qexit))
     {
       if (NETCONN1_P (p))
-	return build_string (XFASTINT (code) == 0
+	return build_string (XFIXNAT (code) == 0
 			     ? "deleted\n"
 			     : "connection broken by remote peer\n");
-      if (XFASTINT (code) == 0)
+      if (XFIXNAT (code) == 0)
 	return build_string ("finished\n");
       AUTO_STRING (prefix, "exited abnormally with code ");
       string = Fnumber_to_string (code);
@@ -1025,7 +1025,7 @@ static Lisp_Object deleted_pid_list;
 void
 record_deleted_pid (pid_t pid, Lisp_Object filename)
 {
-  deleted_pid_list = Fcons (Fcons (make_fixnum_or_float (pid), filename),
+  deleted_pid_list = Fcons (Fcons (INT_TO_INTEGER (pid), filename),
 			    /* GC treated elements set to nil.  */
 			    Fdelq (Qnil, deleted_pid_list));
 
@@ -1064,7 +1064,7 @@ nil, indicating the current buffer's process.  */)
   p->raw_status_new = 0;
   if (NETCONN1_P (p) || SERIALCONN1_P (p) || PIPECONN1_P (p))
     {
-      pset_status (p, list2 (Qexit, make_number (0)));
+      pset_status (p, list2 (Qexit, make_fixnum (0)));
       p->tick = ++process_tick;
       status_notify (p, NULL);
       redisplay_preserve_echo_area (13);
@@ -1083,7 +1083,7 @@ nil, indicating the current buffer's process.  */)
 	    update_status (p);
 	  symbol = CONSP (p->status) ? XCAR (p->status) : p->status;
 	  if (! (EQ (symbol, Qsignal) || EQ (symbol, Qexit)))
-	    pset_status (p, list2 (Qsignal, make_number (SIGKILL)));
+	    pset_status (p, list2 (Qsignal, make_fixnum (SIGKILL)));
 
 	  p->tick = ++process_tick;
 	  status_notify (p, NULL);
@@ -1151,12 +1151,13 @@ If PROCESS has not yet exited or died, return 0.  */)
     update_status (XPROCESS (process));
   if (CONSP (XPROCESS (process)->status))
     return XCAR (XCDR (XPROCESS (process)->status));
-  return make_number (0);
+  return make_fixnum (0);
 }
 
 DEFUN ("process-id", Fprocess_id, Sprocess_id, 1, 1, 0,
        doc: /* Return the process id of PROCESS.
 This is the pid of the external process which PROCESS uses or talks to.
+It is a fixnum if the value is small enough, otherwise a bignum.
 For a network, serial, and pipe connections, this value is nil.  */)
   (register Lisp_Object process)
 {
@@ -1164,7 +1165,7 @@ For a network, serial, and pipe connections, this value is nil.  */)
 
   CHECK_PROCESS (process);
   pid = XPROCESS (process)->pid;
-  return (pid ? make_fixnum_or_float (pid) : Qnil);
+  return pid ? INT_TO_INTEGER (pid) : Qnil;
 }
 
 DEFUN ("process-name", Fprocess_name, Sprocess_name, 1, 1, 0,
@@ -1383,7 +1384,7 @@ nil otherwise.  */)
   if (NETCONN_P (process)
       || XPROCESS (process)->infd < 0
       || (set_window_size (XPROCESS (process)->infd,
-			   XINT (height), XINT (width))
+			   XFIXNUM (height), XFIXNUM (width))
 	  < 0))
     return Qnil;
   else
@@ -1584,12 +1585,12 @@ Return nil if format of ADDRESS is invalid.  */)
 
       for (i = 0; i < nargs; i++)
 	{
-	  if (! RANGED_INTEGERP (0, p->contents[i], 65535))
+	  if (! RANGED_FIXNUMP (0, p->contents[i], 65535))
 	    return Qnil;
 
 	  if (nargs <= 5         /* IPv4 */
 	      && i < 4           /* host, not port */
-	      && XINT (p->contents[i]) > 255)
+	      && XFIXNUM (p->contents[i]) > 255)
 	    return Qnil;
 
 	  args[i + 1] = p->contents[i];
@@ -1789,7 +1790,7 @@ usage: (make-process &rest ARGS)  */)
       val = Vcoding_system_for_read;
     if (NILP (val))
       {
-	ptrdiff_t nargs2 = 3 + XINT (Flength (command));
+	ptrdiff_t nargs2 = 3 + XFIXNUM (Flength (command));
 	Lisp_Object tem2;
 	SAFE_ALLOCA_LISP (args2, nargs2);
 	ptrdiff_t i = 0;
@@ -1819,7 +1820,7 @@ usage: (make-process &rest ARGS)  */)
       {
 	if (EQ (coding_systems, Qt))
 	  {
-	    ptrdiff_t nargs2 = 3 + XINT (Flength (command));
+	    ptrdiff_t nargs2 = 3 + XFIXNUM (Flength (command));
 	    Lisp_Object tem2;
 	    SAFE_ALLOCA_LISP (args2, nargs2);
 	    ptrdiff_t i = 0;
@@ -1864,7 +1865,7 @@ usage: (make-process &rest ARGS)  */)
 	{
 	  tem = Qnil;
 	  openp (Vexec_path, program, Vexec_suffixes, &tem,
-		 make_number (X_OK), false);
+		 make_fixnum (X_OK), false);
 	  if (NILP (tem))
 	    report_file_error ("Searching for program", program);
 	  tem = Fexpand_file_name (tem, Qnil);
@@ -1923,8 +1924,7 @@ usage: (make-process &rest ARGS)  */)
   else
     create_pty (proc);
 
-  SAFE_FREE ();
-  return unbind_to (count, proc);
+  return SAFE_FREE_UNBIND_TO (count, proc);
 }
 
 /* If PROC doesn't have its pid set, then an error was signaled and
@@ -2504,9 +2504,9 @@ conv_sockaddr_to_lisp (struct sockaddr *sa, ptrdiff_t len)
       {
 	DECLARE_POINTER_ALIAS (sin, struct sockaddr_in, sa);
 	len = sizeof (sin->sin_addr) + 1;
-	address = Fmake_vector (make_number (len), Qnil);
+	address = Fmake_vector (make_fixnum (len), Qnil);
 	p = XVECTOR (address);
-	p->contents[--len] = make_number (ntohs (sin->sin_port));
+	p->contents[--len] = make_fixnum (ntohs (sin->sin_port));
 	cp = (unsigned char *) &sin->sin_addr;
 	break;
       }
@@ -2516,11 +2516,11 @@ conv_sockaddr_to_lisp (struct sockaddr *sa, ptrdiff_t len)
 	DECLARE_POINTER_ALIAS (sin6, struct sockaddr_in6, sa);
 	DECLARE_POINTER_ALIAS (ip6, uint16_t, &sin6->sin6_addr);
 	len = sizeof (sin6->sin6_addr) / 2 + 1;
-	address = Fmake_vector (make_number (len), Qnil);
+	address = Fmake_vector (make_fixnum (len), Qnil);
 	p = XVECTOR (address);
-	p->contents[--len] = make_number (ntohs (sin6->sin6_port));
+	p->contents[--len] = make_fixnum (ntohs (sin6->sin6_port));
 	for (i = 0; i < len; i++)
-	  p->contents[i] = make_number (ntohs (ip6[i]));
+	  p->contents[i] = make_fixnum (ntohs (ip6[i]));
 	return address;
       }
 #endif
@@ -2548,8 +2548,8 @@ conv_sockaddr_to_lisp (struct sockaddr *sa, ptrdiff_t len)
 #endif
     default:
       len -= offsetof (struct sockaddr, sa_family) + sizeof (sa->sa_family);
-      address = Fcons (make_number (sa->sa_family),
-		       Fmake_vector (make_number (len), Qnil));
+      address = Fcons (make_fixnum (sa->sa_family),
+		       Fmake_vector (make_fixnum (len), Qnil));
       p = XVECTOR (XCDR (address));
       cp = (unsigned char *) &sa->sa_family + sizeof (sa->sa_family);
       break;
@@ -2557,7 +2557,7 @@ conv_sockaddr_to_lisp (struct sockaddr *sa, ptrdiff_t len)
 
   i = 0;
   while (i < len)
-    p->contents[i++] = make_number (*cp++);
+    p->contents[i++] = make_fixnum (*cp++);
 
   return address;
 }
@@ -2567,8 +2567,8 @@ conv_sockaddr_to_lisp (struct sockaddr *sa, ptrdiff_t len)
 static Lisp_Object
 conv_addrinfo_to_lisp (struct addrinfo *res)
 {
-  Lisp_Object protocol = make_number (res->ai_protocol);
-  eassert (XINT (protocol) == res->ai_protocol);
+  Lisp_Object protocol = make_fixnum (res->ai_protocol);
+  eassert (XFIXNUM (protocol) == res->ai_protocol);
   return Fcons (protocol, conv_sockaddr_to_lisp (res->ai_addr, res->ai_addrlen));
 }
 
@@ -2603,14 +2603,14 @@ get_lisp_to_sockaddr_size (Lisp_Object address, int *familyp)
       return sizeof (struct sockaddr_un);
     }
 #endif
-  else if (CONSP (address) && TYPE_RANGED_INTEGERP (int, XCAR (address))
+  else if (CONSP (address) && TYPE_RANGED_FIXNUMP (int, XCAR (address))
 	   && VECTORP (XCDR (address)))
     {
       struct sockaddr *sa;
       p = XVECTOR (XCDR (address));
       if (MAX_ALLOCA - sizeof sa->sa_family < p->header.size)
 	return 0;
-      *familyp = XINT (XCAR (address));
+      *familyp = XFIXNUM (XCAR (address));
       return p->header.size + sizeof (sa->sa_family);
     }
   return 0;
@@ -2640,7 +2640,7 @@ conv_lisp_to_sockaddr (int family, Lisp_Object address, struct sockaddr *sa, int
 	{
 	  DECLARE_POINTER_ALIAS (sin, struct sockaddr_in, sa);
 	  len = sizeof (sin->sin_addr) + 1;
-	  hostport = XINT (p->contents[--len]);
+	  hostport = XFIXNUM (p->contents[--len]);
 	  sin->sin_port = htons (hostport);
 	  cp = (unsigned char *)&sin->sin_addr;
 	  sa->sa_family = family;
@@ -2651,12 +2651,12 @@ conv_lisp_to_sockaddr (int family, Lisp_Object address, struct sockaddr *sa, int
 	  DECLARE_POINTER_ALIAS (sin6, struct sockaddr_in6, sa);
 	  DECLARE_POINTER_ALIAS (ip6, uint16_t, &sin6->sin6_addr);
 	  len = sizeof (sin6->sin6_addr) / 2 + 1;
-	  hostport = XINT (p->contents[--len]);
+	  hostport = XFIXNUM (p->contents[--len]);
 	  sin6->sin6_port = htons (hostport);
 	  for (i = 0; i < len; i++)
-	    if (INTEGERP (p->contents[i]))
+	    if (FIXNUMP (p->contents[i]))
 	      {
-		int j = XFASTINT (p->contents[i]) & 0xffff;
+		int j = XFIXNAT (p->contents[i]) & 0xffff;
 		ip6[i] = ntohs (j);
 	      }
 	  sa->sa_family = family;
@@ -2687,8 +2687,8 @@ conv_lisp_to_sockaddr (int family, Lisp_Object address, struct sockaddr *sa, int
     }
 
   for (i = 0; i < len; i++)
-    if (INTEGERP (p->contents[i]))
-      *cp++ = XFASTINT (p->contents[i]) & 0xff;
+    if (FIXNUMP (p->contents[i]))
+      *cp++ = XFIXNAT (p->contents[i]) & 0xff;
 }
 
 #ifdef DATAGRAM_SOCKETS
@@ -2819,8 +2819,8 @@ set_socket_option (int s, Lisp_Object opt, Lisp_Object val)
     case SOPT_INT:
       {
 	int optval;
-	if (TYPE_RANGED_INTEGERP (int, val))
-	  optval = XINT (val);
+	if (TYPE_RANGED_FIXNUMP (int, val))
+	  optval = XFIXNUM (val);
 	else
 	  error ("Bad option value for %s", name);
 	ret = setsockopt (s, sopt->optlevel, sopt->optnum,
@@ -2858,8 +2858,8 @@ set_socket_option (int s, Lisp_Object opt, Lisp_Object val)
 
 	linger.l_onoff = 1;
 	linger.l_linger = 0;
-	if (TYPE_RANGED_INTEGERP (int, val))
-	  linger.l_linger = XINT (val);
+	if (TYPE_RANGED_FIXNUMP (int, val))
+	  linger.l_linger = XFIXNUM (val);
 	else
 	  linger.l_onoff = NILP (val) ? 0 : 1;
 	ret = setsockopt (s, sopt->optlevel, sopt->optnum,
@@ -3103,7 +3103,7 @@ usage:  (make-serial-process &rest ARGS)  */)
   if (NILP (Fplist_member (contact, QCspeed)))
     error (":speed not specified");
   if (!NILP (Fplist_get (contact, QCspeed)))
-    CHECK_NUMBER (Fplist_get (contact, QCspeed));
+    CHECK_FIXNUM (Fplist_get (contact, QCspeed));
 
   name = Fplist_get (contact, QCname);
   if (NILP (name))
@@ -3331,13 +3331,11 @@ static void
 connect_network_socket (Lisp_Object proc, Lisp_Object addrinfos,
                         Lisp_Object use_external_socket_p)
 {
-  ptrdiff_t count = SPECPDL_INDEX ();
   int s = -1, outch, inch;
   int xerrno = 0;
   int family;
-  struct sockaddr *sa = NULL;
   int ret;
-  ptrdiff_t addrlen;
+  ptrdiff_t addrlen UNINIT;
   struct Lisp_Process *p = XPROCESS (proc);
   Lisp_Object contact = p->childp;
   int optbits = 0;
@@ -3354,11 +3352,16 @@ connect_network_socket (Lisp_Object proc, Lisp_Object addrinfos,
   /* Do this in case we never enter the while-loop below.  */
   s = -1;
 
+  struct sockaddr *sa = NULL;
+  ptrdiff_t count = SPECPDL_INDEX ();
+  record_unwind_protect_nothing ();
+  ptrdiff_t count1 = SPECPDL_INDEX ();
+
   while (!NILP (addrinfos))
     {
       Lisp_Object addrinfo = XCAR (addrinfos);
       addrinfos = XCDR (addrinfos);
-      int protocol = XINT (XCAR (addrinfo));
+      int protocol = XFIXNUM (XCAR (addrinfo));
       Lisp_Object ip_address = XCDR (addrinfo);
 
 #ifdef WINDOWSNT
@@ -3366,9 +3369,8 @@ connect_network_socket (Lisp_Object proc, Lisp_Object addrinfos,
 #endif
 
       addrlen = get_lisp_to_sockaddr_size (ip_address, &family);
-      if (sa)
-	free (sa);
-      sa = xmalloc (addrlen);
+      sa = xrealloc (sa, addrlen);
+      set_unwind_protect_ptr (count, xfree, sa);
       conv_lisp_to_sockaddr (family, ip_address, sa, addrlen);
 
       s = socket_to_use;
@@ -3465,7 +3467,7 @@ connect_network_socket (Lisp_Object proc, Lisp_Object addrinfos,
 	      DECLARE_POINTER_ALIAS (psa1, struct sockaddr, &sa1);
 	      if (getsockname (s, psa1, &len1) == 0)
 		{
-		  Lisp_Object service = make_number (ntohs (sa1.sin_port));
+		  Lisp_Object service = make_fixnum (ntohs (sa1.sin_port));
 		  contact = Fplist_put (contact, QCservice, service);
 		  /* Save the port number so that we can stash it in
 		     the process object later.  */
@@ -3530,7 +3532,7 @@ connect_network_socket (Lisp_Object proc, Lisp_Object addrinfos,
 #endif /* !WINDOWSNT */
 
       /* Discard the unwind protect closing S.  */
-      specpdl_ptr = specpdl + count;
+      specpdl_ptr = specpdl + count1;
       emacs_close (s);
       s = -1;
       if (0 <= socket_to_use)
@@ -3588,17 +3590,24 @@ connect_network_socket (Lisp_Object proc, Lisp_Object addrinfos,
 
   if (s < 0)
     {
+      const char *err = (p->is_server
+			 ? "make server process failed"
+			 : "make client process failed");
+
       /* If non-blocking got this far - and failed - assume non-blocking is
 	 not supported after all.  This is probably a wrong assumption, but
 	 the normal blocking calls to open-network-stream handles this error
 	 better.  */
       if (p->is_non_blocking_client)
-	return;
+	{
+	  Lisp_Object data = get_file_errno_data (err, contact, xerrno);
 
-      report_file_errno ((p->is_server
-			  ? "make server process failed"
-			  : "make client process failed"),
-			 contact, xerrno);
+	  pset_status (p, list2 (Fcar (data), Fcdr (data)));
+	  unbind_to (count, Qnil);
+	  return;
+	}
+
+      report_file_errno (err, contact, xerrno);
     }
 
   inch = s;
@@ -3614,7 +3623,7 @@ connect_network_socket (Lisp_Object proc, Lisp_Object addrinfos,
   p->outfd = outch;
 
   /* Discard the unwind protect for closing S, if any.  */
-  specpdl_ptr = specpdl + count;
+  specpdl_ptr = specpdl + count1;
 
   if (p->is_server && p->socktype != SOCK_DGRAM)
     pset_status (p, Qlisten);
@@ -3675,6 +3684,7 @@ connect_network_socket (Lisp_Object proc, Lisp_Object addrinfos,
     }
 #endif
 
+  unbind_to (count, Qnil);
 }
 
 /* Create a network stream/datagram client/server process.  Treated
@@ -3898,12 +3908,15 @@ usage: (make-network-process &rest ARGS)  */)
   filter = Fplist_get (contact, QCfilter);
   sentinel = Fplist_get (contact, QCsentinel);
   use_external_socket_p = Fplist_get (contact, QCuse_external_socket);
+  Lisp_Object server = Fplist_get (contact, QCserver);
+  bool nowait = !NILP (Fplist_get (contact, QCnowait));
 
+  if (!NILP (server) && nowait)
+    error ("`:server' is incompatible with `:nowait'");
   CHECK_STRING (name);
 
   /* :local ADDRESS or :remote ADDRESS */
-  tem = Fplist_get (contact, QCserver);
-  if (NILP (tem))
+  if (NILP (server))
     address = Fplist_get (contact, QCremote);
   else
     address = Fplist_get (contact, QClocal);
@@ -3914,7 +3927,7 @@ usage: (make-network-process &rest ARGS)  */)
       if (!get_lisp_to_sockaddr_size (address, &family))
 	error ("Malformed :address");
 
-      addrinfos = list1 (Fcons (make_number (any_protocol), address));
+      addrinfos = list1 (Fcons (make_fixnum (any_protocol), address));
       goto open_socket;
     }
 
@@ -3938,8 +3951,8 @@ usage: (make-network-process &rest ARGS)  */)
 #endif
   else if (EQ (tem, Qipv4))
     family = AF_INET;
-  else if (TYPE_RANGED_INTEGERP (int, tem))
-    family = XINT (tem);
+  else if (TYPE_RANGED_FIXNUMP (int, tem))
+    family = XFIXNUM (tem);
   else
     error ("Unknown address family");
 
@@ -3978,7 +3991,7 @@ usage: (make-network-process &rest ARGS)  */)
       CHECK_STRING (service);
       if (sizeof address_un.sun_path <= SBYTES (service))
 	error ("Service name too long");
-      addrinfos = list1 (Fcons (make_number (any_protocol), service));
+      addrinfos = list1 (Fcons (make_fixnum (any_protocol), service));
       goto open_socket;
     }
 #endif
@@ -4005,10 +4018,10 @@ usage: (make-network-process &rest ARGS)  */)
 	  portstring = "0";
 	  portstringlen = 1;
 	}
-      else if (INTEGERP (service))
+      else if (FIXNUMP (service))
 	{
 	  portstring = portbuf;
-	  portstringlen = sprintf (portbuf, "%"pI"d", XINT (service));
+	  portstringlen = sprintf (portbuf, "%"pI"d", XFIXNUM (service));
 	}
       else
 	{
@@ -4018,7 +4031,7 @@ usage: (make-network-process &rest ARGS)  */)
 	}
 
 #ifdef HAVE_GETADDRINFO_A
-      if (!NILP (Fplist_get (contact, QCnowait)))
+      if (nowait)
 	{
 	  ptrdiff_t hostlen = SBYTES (host);
 	  struct req
@@ -4093,8 +4106,8 @@ usage: (make-network-process &rest ARGS)  */)
 
   if (EQ (service, Qt))
     port = 0;
-  else if (INTEGERP (service))
-    port = XINT (service);
+  else if (FIXNUMP (service))
+    port = XFIXNUM (service);
   else
     {
       CHECK_STRING (service);
@@ -4165,20 +4178,13 @@ usage: (make-network-process &rest ARGS)  */)
 
   set_network_socket_coding_system (proc, host, service, name);
 
-  /* :server BOOL */
-  tem = Fplist_get (contact, QCserver);
-  if (!NILP (tem))
-    {
-      /* Don't support network sockets when non-blocking mode is
-	 not available, since a blocked Emacs is not useful.  */
-      p->is_server = true;
-      if (TYPE_RANGED_INTEGERP (int, tem))
-	p->backlog = XINT (tem);
-    }
+  /* :server QLEN */
+  p->is_server = !NILP (server);
+  if (TYPE_RANGED_FIXNUMP (int, server))
+    p->backlog = XFIXNUM (server);
 
   /* :nowait BOOL */
-  if (!p->is_server && socktype != SOCK_DGRAM
-      && !NILP (Fplist_get (contact, QCnowait)))
+  if (!p->is_server && socktype != SOCK_DGRAM && nowait)
     p->is_non_blocking_client = true;
 
   bool postpone_connection = false;
@@ -4399,7 +4405,7 @@ network_interface_info (Lisp_Object ifname)
 	{
 	  if (flags & 1)
 	    {
-	      elt = Fcons (make_number (fnum), elt);
+	      elt = Fcons (make_fixnum (fnum), elt);
 	    }
 	}
     }
@@ -4410,21 +4416,21 @@ network_interface_info (Lisp_Object ifname)
 #if defined (SIOCGIFHWADDR) && defined (HAVE_STRUCT_IFREQ_IFR_HWADDR)
   if (ioctl (s, SIOCGIFHWADDR, &rq) == 0)
     {
-      Lisp_Object hwaddr = Fmake_vector (make_number (6), Qnil);
+      Lisp_Object hwaddr = Fmake_vector (make_fixnum (6), Qnil);
       register struct Lisp_Vector *p = XVECTOR (hwaddr);
       int n;
 
       any = 1;
       for (n = 0; n < 6; n++)
-	p->contents[n] = make_number (((unsigned char *)
+	p->contents[n] = make_fixnum (((unsigned char *)
 				       &rq.ifr_hwaddr.sa_data[0])
 				      [n]);
-      elt = Fcons (make_number (rq.ifr_hwaddr.sa_family), hwaddr);
+      elt = Fcons (make_fixnum (rq.ifr_hwaddr.sa_family), hwaddr);
     }
 #elif defined (HAVE_GETIFADDRS) && defined (LLADDR)
   if (getifaddrs (&ifap) != -1)
     {
-      Lisp_Object hwaddr = Fmake_vector (make_number (6), Qnil);
+      Lisp_Object hwaddr = Fmake_vector (make_fixnum (6), Qnil);
       register struct Lisp_Vector *p = XVECTOR (hwaddr);
       struct ifaddrs *it;
 
@@ -4441,9 +4447,9 @@ network_interface_info (Lisp_Object ifname)
 
           memcpy (linkaddr, LLADDR (sdl), sdl->sdl_alen);
           for (n = 0; n < 6; n++)
-            p->contents[n] = make_number (linkaddr[n]);
+            p->contents[n] = make_fixnum (linkaddr[n]);
 
-          elt = Fcons (make_number (it->ifa_addr->sa_family), hwaddr);
+          elt = Fcons (make_fixnum (it->ifa_addr->sa_family), hwaddr);
           break;
         }
     }
@@ -4613,16 +4619,15 @@ is nil, from any process) before the timeout expired.  */)
 
       /* Can't wait for a process that is dedicated to a different
 	 thread.  */
-      if (!EQ (proc->thread, Qnil) && !EQ (proc->thread, Fcurrent_thread ()))
+      if (!NILP (proc->thread) && !EQ (proc->thread, Fcurrent_thread ()))
 	{
 	  Lisp_Object proc_thread_name = XTHREAD (proc->thread)->name;
 
-	  if (STRINGP (proc_thread_name))
-	    error ("Attempt to accept output from process %s locked to thread %s",
-		   SDATA (proc->name), SDATA (proc_thread_name));
-	  else
-	    error ("Attempt to accept output from process %s locked to thread %p",
-		   SDATA (proc->name), XTHREAD (proc->thread));
+	  error ("Attempt to accept output from process %s locked to thread %s",
+		 SDATA (proc->name),
+		 STRINGP (proc_thread_name)
+		 ? SDATA (proc_thread_name)
+		 : SDATA (Fprin1_to_string (proc->thread, Qt)));
 	}
     }
   else
@@ -4630,13 +4635,13 @@ is nil, from any process) before the timeout expired.  */)
 
   if (!NILP (millisec))
     { /* Obsolete calling convention using integers rather than floats.  */
-      CHECK_NUMBER (millisec);
+      CHECK_FIXNUM (millisec);
       if (NILP (seconds))
-	seconds = make_float (XINT (millisec) / 1000.0);
+	seconds = make_float (XFIXNUM (millisec) / 1000.0);
       else
 	{
-	  CHECK_NUMBER (seconds);
-	  seconds = make_float (XINT (millisec) / 1000.0 + XINT (seconds));
+	  CHECK_FIXNUM (seconds);
+	  seconds = make_float (XFIXNUM (millisec) / 1000.0 + XFIXNUM (seconds));
 	}
     }
 
@@ -4645,11 +4650,11 @@ is nil, from any process) before the timeout expired.  */)
 
   if (!NILP (seconds))
     {
-      if (INTEGERP (seconds))
+      if (FIXNUMP (seconds))
 	{
-	  if (XINT (seconds) > 0)
+	  if (XFIXNUM (seconds) > 0)
 	    {
-	      secs = XINT (seconds);
+	      secs = XFIXNUM (seconds);
 	      nsecs = 0;
 	    }
 	}
@@ -4673,7 +4678,7 @@ is nil, from any process) before the timeout expired.  */)
 				   Qnil,
 				   !NILP (process) ? XPROCESS (process) : NULL,
 				   (NILP (just_this_one) ? 0
-				    : !INTEGERP (just_this_one) ? 1 : -1))
+				    : !FIXNUMP (just_this_one) ? 1 : -1))
       <= 0)
      ? Qnil : Qt);
 }
@@ -4702,7 +4707,7 @@ server_accept_connection (Lisp_Object server, int channel)
       if (!would_block (code) && !NILP (ps->log))
 	call3 (ps->log, server, Qnil,
 	       concat3 (build_string ("accept failed with code"),
-			Fnumber_to_string (make_number (code)),
+			Fnumber_to_string (make_fixnum (code)),
 			build_string ("\n")));
       return;
     }
@@ -4730,9 +4735,9 @@ server_accept_connection (Lisp_Object server, int channel)
 	args[nargs++] = procname_format_in;
 	nargs++;
 	unsigned char *ip = (unsigned char *)&saddr.in.sin_addr.s_addr;
-	service = make_number (ntohs (saddr.in.sin_port));
+	service = make_fixnum (ntohs (saddr.in.sin_port));
 	for (int i = 0; i < 4; i++)
-	  args[nargs++] = make_number (ip[i]);
+	  args[nargs++] = make_fixnum (ip[i]);
 	args[nargs++] = service;
       }
       break;
@@ -4743,9 +4748,9 @@ server_accept_connection (Lisp_Object server, int channel)
 	args[nargs++] = procname_format_in6;
 	nargs++;
 	DECLARE_POINTER_ALIAS (ip6, uint16_t, &saddr.in6.sin6_addr);
-	service = make_number (ntohs (saddr.in.sin_port));
+	service = make_fixnum (ntohs (saddr.in.sin_port));
 	for (int i = 0; i < 8; i++)
-	  args[nargs++] = make_number (ip6[i]);
+	  args[nargs++] = make_fixnum (ip6[i]);
 	args[nargs++] = service;
       }
       break;
@@ -4754,7 +4759,7 @@ server_accept_connection (Lisp_Object server, int channel)
     default:
       args[nargs++] = procname_format_default;
       nargs++;
-      args[nargs++] = make_number (connect_counter);
+      args[nargs++] = make_fixnum (connect_counter);
       break;
     }
 
@@ -5009,7 +5014,7 @@ wait_reading_process_output (intmax_t time_limit, int nsecs, int read_kbd,
   Lisp_Object proc;
   struct timespec timeout, end_time, timer_delay;
   struct timespec got_output_end_time = invalid_timespec ();
-  enum { MINIMUM = -1, TIMEOUT, INFINITY } wait;
+  enum { MINIMUM = -1, TIMEOUT, FOREVER } wait;
   int got_some_output = -1;
   uintmax_t prev_wait_proc_nbytes_read = wait_proc ? wait_proc->nbytes_read : 0;
 #if defined HAVE_GETADDRINFO_A || defined HAVE_GNUTLS
@@ -5021,7 +5026,7 @@ wait_reading_process_output (intmax_t time_limit, int nsecs, int read_kbd,
   struct timespec now = invalid_timespec ();
 
   eassert (wait_proc == NULL
-	   || EQ (wait_proc->thread, Qnil)
+	   || NILP (wait_proc->thread)
 	   || XTHREAD (wait_proc->thread) == current_thread);
 
   FD_ZERO (&Available);
@@ -5048,7 +5053,7 @@ wait_reading_process_output (intmax_t time_limit, int nsecs, int read_kbd,
       end_time = timespec_add (now, make_timespec (time_limit, nsecs));
     }
   else
-    wait = INFINITY;
+    wait = FOREVER;
 
   while (1)
     {
@@ -5473,7 +5478,7 @@ wait_reading_process_output (intmax_t time_limit, int nsecs, int read_kbd,
              have waited a long amount of time due to repeated
              timers.  */
 	  struct timespec huge_timespec
-	    = make_timespec (TYPE_MAXIMUM (time_t), 2 * TIMESPEC_RESOLUTION);
+	    = make_timespec (TYPE_MAXIMUM (time_t), 2 * TIMESPEC_HZ);
 	  struct timespec cmp_time = huge_timespec;
 	  if (wait < TIMEOUT
               || (wait_proc
@@ -5676,7 +5681,7 @@ wait_reading_process_output (intmax_t time_limit, int nsecs, int read_kbd,
 		  deactivate_process (proc);
 		  if (EQ (XPROCESS (proc)->status, Qrun))
 		    pset_status (XPROCESS (proc),
-				 list2 (Qexit, make_number (0)));
+				 list2 (Qexit, make_fixnum (0)));
 		}
 	      else
 		{
@@ -5687,7 +5692,7 @@ wait_reading_process_output (intmax_t time_limit, int nsecs, int read_kbd,
 		    update_status (XPROCESS (proc));
 		  if (EQ (XPROCESS (proc)->status, Qrun))
 		    pset_status (XPROCESS (proc),
-				 list2 (Qexit, make_number (256)));
+				 list2 (Qexit, make_fixnum (256)));
 		}
 	    }
 	  if (FD_ISSET (channel, &Writeok)
@@ -5739,7 +5744,7 @@ wait_reading_process_output (intmax_t time_limit, int nsecs, int read_kbd,
 		  else
 		    {
 		      p->tick = ++process_tick;
-		      pset_status (p, list2 (Qfailed, make_number (xerrno)));
+		      pset_status (p, list2 (Qfailed, make_fixnum (xerrno)));
 		    }
 		  deactivate_process (proc);
 		  if (!NILP (addrinfos))
@@ -5808,7 +5813,7 @@ read_process_output_error_handler (Lisp_Object error_val)
   cmd_error_internal (error_val, "error in process filter: ");
   Vinhibit_quit = Qt;
   update_echo_area ();
-  Fsleep_for (make_number (2), Qnil);
+  Fsleep_for (make_fixnum (2), Qnil);
   return Qt;
 }
 
@@ -6126,7 +6131,7 @@ Otherwise it discards the output.  */)
 
       /* If the restriction isn't what it should be, set it.  */
       if (old_begv != BEGV || old_zv != ZV)
-	Fnarrow_to_region (make_number (old_begv), make_number (old_zv));
+	Fnarrow_to_region (make_fixnum (old_begv), make_fixnum (old_zv));
 
       bset_read_only (current_buffer, old_read_only);
       SET_PT_BOTH (opoint, opoint_byte);
@@ -6173,7 +6178,7 @@ write_queue_push (struct Lisp_Process *p, Lisp_Object input_obj,
       obj = make_unibyte_string (buf, len);
     }
 
-  entry = Fcons (obj, Fcons (make_number (offset), make_number (len)));
+  entry = Fcons (obj, Fcons (make_fixnum (offset), make_fixnum (len)));
 
   if (front)
     pset_write_queue (p, Fcons (entry, p->write_queue));
@@ -6201,8 +6206,8 @@ write_queue_pop (struct Lisp_Process *p, Lisp_Object *obj,
   *obj = XCAR (entry);
   offset_length = XCDR (entry);
 
-  *len = XINT (XCDR (offset_length));
-  offset = XINT (XCAR (offset_length));
+  *len = XFIXNUM (XCDR (offset_length));
+  offset = XFIXNUM (XCAR (offset_length));
   *buf = SSDATA (*obj) + offset;
 
   return 1;
@@ -6410,7 +6415,7 @@ send_process (Lisp_Object proc, const char *buf, ptrdiff_t len,
 		    }
 #endif /* BROKEN_PTY_READ_AFTER_EAGAIN */
 
-		  /* Put what we should have written in wait_queue.  */
+		  /* Put what we should have written in write_queue.  */
 		  write_queue_push (p, cur_object, cur_buf, cur_len, 1);
 		  wait_reading_process_output (0, 20 * 1000 * 1000,
 					       0, 0, Qnil, NULL, 0);
@@ -6420,7 +6425,7 @@ send_process (Lisp_Object proc, const char *buf, ptrdiff_t len,
 	      else if (errno == EPIPE)
 		{
 		  p->raw_status_new = 0;
-		  pset_status (p, list2 (Qexit, make_number (256)));
+		  pset_status (p, list2 (Qexit, make_fixnum (256)));
 		  p->tick = ++process_tick;
 		  deactivate_process (proc);
 		  error ("process %s no longer connected to pipe; closed it",
@@ -6456,11 +6461,11 @@ set up yet, this function will block until socket setup has completed.  */)
 
   validate_region (&start, &end);
 
-  start_byte = CHAR_TO_BYTE (XINT (start));
-  end_byte = CHAR_TO_BYTE (XINT (end));
+  start_byte = CHAR_TO_BYTE (XFIXNUM (start));
+  end_byte = CHAR_TO_BYTE (XFIXNUM (end));
 
-  if (XINT (start) < GPT && XINT (end) > GPT)
-    move_gap_both (XINT (start), start_byte);
+  if (XFIXNUM (start) < GPT && XFIXNUM (end) > GPT)
+    move_gap_both (XFIXNUM (start), start_byte);
 
   if (NETCONN_P (proc))
     wait_while_connecting (proc);
@@ -6542,7 +6547,7 @@ process group.  */)
   if (gid == p->pid)
     return Qnil;
   if (gid != -1)
-    return make_number (gid);
+    return make_fixnum (gid);
   return Qt;
 }
 
@@ -6847,7 +6852,7 @@ SIGCODE may be an integer, or a symbol whose name is a signal name.  */)
     {
       Lisp_Object tem = Fget_process (process);
       if (NILP (tem))
-	tem = string_to_number (SSDATA (process), 10, S2N_OVERFLOW_TO_FLOAT);
+	tem = string_to_number (SSDATA (process), 10, 0);
       process = tem;
     }
   else if (!NUMBERP (process))
@@ -6866,10 +6871,10 @@ SIGCODE may be an integer, or a symbol whose name is a signal name.  */)
 	error ("Cannot signal process %s", SDATA (XPROCESS (process)->name));
     }
 
-  if (INTEGERP (sigcode))
+  if (FIXNUMP (sigcode))
     {
       CHECK_TYPE_RANGED_INTEGER (int, sigcode);
-      signo = XINT (sigcode);
+      signo = XFIXNUM (sigcode);
     }
   else
     {
@@ -6883,7 +6888,7 @@ SIGCODE may be an integer, or a symbol whose name is a signal name.  */)
 	error ("Undefined signal name %s", name);
     }
 
-  return make_number (kill (pid, signo));
+  return make_fixnum (kill (pid, signo));
 }
 
 DEFUN ("process-send-eof", Fprocess_send_eof, Sprocess_send_eof, 0, 1, 0,
@@ -7053,13 +7058,11 @@ handle_child_signal (int sig)
       if (! CONSP (head))
 	continue;
       xpid = XCAR (head);
-      if (all_pids_are_fixnums ? INTEGERP (xpid) : NUMBERP (xpid))
+      if (all_pids_are_fixnums ? FIXNUMP (xpid) : INTEGERP (xpid))
 	{
-	  pid_t deleted_pid;
-	  if (INTEGERP (xpid))
-	    deleted_pid = XINT (xpid);
-	  else
-	    deleted_pid = XFLOAT_DATA (xpid);
+	  intmax_t deleted_pid;
+	  bool ok = integer_to_intmax (xpid, &deleted_pid);
+	  eassert (ok);
 	  if (child_status_changed (deleted_pid, 0, 0))
 	    {
 	      if (STRINGP (XCDR (head)))
@@ -7123,7 +7126,7 @@ exec_sentinel_error_handler (Lisp_Object error_val)
   cmd_error_internal (error_val, "error in process sentinel: ");
   Vinhibit_quit = Qt;
   update_echo_area ();
-  Fsleep_for (make_number (2), Qnil);
+  Fsleep_for (make_fixnum (2), Qnil);
   return Qt;
 }
 
@@ -7518,7 +7521,7 @@ wait_reading_process_output (intmax_t time_limit, int nsecs, int read_kbd,
 {
   register int nfds;
   struct timespec end_time, timeout;
-  enum { MINIMUM = -1, TIMEOUT, INFINITY } wait;
+  enum { MINIMUM = -1, TIMEOUT, FOREVER } wait;
 
   if (TYPE_MAXIMUM (time_t) < time_limit)
     time_limit = TYPE_MAXIMUM (time_t);
@@ -7532,7 +7535,7 @@ wait_reading_process_output (intmax_t time_limit, int nsecs, int read_kbd,
                                make_timespec (time_limit, nsecs));
     }
   else
-    wait = INFINITY;
+    wait = FOREVER;
 
   /* Turn off periodic alarms (in case they are in use)
      and then turn off any other atimers,
@@ -7638,7 +7641,7 @@ wait_reading_process_output (intmax_t time_limit, int nsecs, int read_kbd,
       /*  If we woke up due to SIGWINCH, actually change size now.  */
       do_pending_window_change (0);
 
-      if (wait < INFINITY && nfds == 0 && ! timeout_reduced_for_timers)
+      if (wait < FOREVER && nfds == 0 && ! timeout_reduced_for_timers)
 	/* We waited the full specified time, so return now.  */
 	break;
 

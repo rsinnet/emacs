@@ -3084,11 +3084,12 @@ already set by this routine."
 	(while (and best-window (not (zerop delta)))
 	  (setq sub last)
 	  (setq best-window nil)
-	  (setq best-value most-negative-fixnum)
+	  (setq best-value nil)
 	  (while sub
 	    (when (and (consp (window-new-normal sub))
 		       (not (<= (car (window-new-normal sub)) 0))
-		       (> (cdr (window-new-normal sub)) best-value))
+		       (or (not best-value)
+			   (> (cdr (window-new-normal sub)) best-value)))
 	      (setq best-window sub)
 	      (setq best-value (cdr (window-new-normal sub))))
 
@@ -3113,10 +3114,11 @@ already set by this routine."
 	(while (and best-window (not (zerop delta)))
 	  (setq sub last)
 	  (setq best-window nil)
-	  (setq best-value most-positive-fixnum)
+	  (setq best-value nil)
 	  (while sub
 	    (when (and (numberp (window-new-normal sub))
-		       (< (window-new-normal sub) best-value))
+		       (or (not best-value)
+		           (< (window-new-normal sub) best-value)))
 	      (setq best-window sub)
 	      (setq best-value (window-new-normal sub)))
 
@@ -8767,7 +8769,7 @@ A prefix argument is handled like `recenter':
  With plain `C-u', move current line to window center."
   (interactive "P")
   (cond
-   (arg (recenter arg))			; Always respect ARG.
+   (arg (recenter arg t))                 ; Always respect ARG.
    (t
     (setq recenter-last-op
 	  (if (eq this-command last-command)
@@ -8778,15 +8780,15 @@ A prefix argument is handled like `recenter':
 	   (min (max 0 scroll-margin)
 		(truncate (/ (window-body-height) 4.0)))))
       (cond ((eq recenter-last-op 'middle)
-	     (recenter))
+	     (recenter nil t))
 	    ((eq recenter-last-op 'top)
-	     (recenter this-scroll-margin))
+	     (recenter this-scroll-margin t))
 	    ((eq recenter-last-op 'bottom)
-	     (recenter (- -1 this-scroll-margin)))
+	     (recenter (- -1 this-scroll-margin) t))
 	    ((integerp recenter-last-op)
-	     (recenter recenter-last-op))
+	     (recenter recenter-last-op t))
 	    ((floatp recenter-last-op)
-	     (recenter (round (* recenter-last-op (window-height))))))))))
+	     (recenter (round (* recenter-last-op (window-height))) t)))))))
 
 (define-key global-map [?\C-l] 'recenter-top-bottom)
 

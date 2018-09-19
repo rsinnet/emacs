@@ -869,9 +869,26 @@ buffer where the user can select from the list."
 ;;;###autoload
 (defun xref-find-references (identifier)
   "Find references to the identifier at point.
-With prefix argument, prompt for the identifier."
+This command might prompt for the identifier as needed, perhaps
+offering the symbol at point as the default.
+With prefix argument, or if `xref-prompt-for-identifier' is t,
+always prompt for the identifier.  If `xref-prompt-for-identifier'
+is nil, prompt only if there's no usable symbol at point."
   (interactive (list (xref--read-identifier "Find references of: ")))
   (xref--find-xrefs identifier 'references identifier nil))
+
+;;;###autoload
+(defun xref-find-definitions-at-mouse (event)
+  "Find the definition of identifier at or around mouse click.
+This command is intended to be bound to a mouse event."
+  (interactive "e")
+  (let ((identifier
+         (save-excursion
+           (mouse-set-point event)
+           (xref-backend-identifier-at-point (xref-find-backend)))))
+    (if identifier
+        (xref-find-definitions identifier)
+      (user-error "No identifier here"))))
 
 (declare-function apropos-parse-pattern "apropos" (pattern))
 

@@ -486,8 +486,8 @@ to be identified as that note."
   "Face used to show the selected portion of a formula."
   :group 'calc)
 
-(defvar calc-bug-address "emacs-devel@gnu.org"
-  "Address of the maintainer of Calc, for use by `report-calc-bug'.")
+(define-obsolete-variable-alias 'calc-bug-address 'report-emacs-bug-address
+  "26.2")
 
 (defvar calc-scan-for-dels t
   "If t, scan keymaps to find all DEL-like keys.
@@ -2781,13 +2781,6 @@ largest Emacs integer.")
   (cond
    ((>= a 0)
     (cons 'bigpos (math-bignum-big a)))
-   ((= a most-negative-fixnum)
-    ;; Note: cannot get the negation directly because
-    ;; (- most-negative-fixnum) is most-negative-fixnum.
-    ;;
-    ;; most-negative-fixnum := -most-positive-fixnum - 1
-    (math-sub (cons 'bigneg (math-bignum-big most-positive-fixnum))
-	      1))
    (t
     (cons 'bigneg (math-bignum-big (- a))))))
 
