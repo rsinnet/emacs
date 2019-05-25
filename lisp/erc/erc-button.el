@@ -1,9 +1,8 @@
 ;; erc-button.el --- A way of buttonizing certain things in ERC buffers  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1996-2004, 2006-2018 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2004, 2006-2019 Free Software Foundation, Inc.
 
 ;; Author: Mario Lang <mlang@delysid.org>
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: irc, button, url, regexp
 ;; URL: http://www.emacswiki.org/cgi-bin/wiki.pl?ErcButton
 

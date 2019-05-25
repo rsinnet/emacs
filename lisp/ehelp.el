@@ -1,10 +1,9 @@
 ;;; ehelp.el --- bindings for electric-help mode -*- lexical-binding: t -*-
 
-;; Copyright (C) 1986, 1995, 2000-2018 Free Software Foundation, Inc.
+;; Copyright (C) 1986, 1995, 2000-2019 Free Software Foundation, Inc.
 
 ;; Author: Richard Mlynarik
 ;; (according to ack.texi and authors.el)
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: help, extensions
 
 ;; This file is part of GNU Emacs.

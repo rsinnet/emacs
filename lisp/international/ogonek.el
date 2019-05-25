@@ -1,10 +1,9 @@
 ;;; ogonek.el --- change the encoding of Polish diacritics
 
-;; Copyright (C) 1997-1998, 2001-2018 Free Software Foundation, Inc.
+;; Copyright (C) 1997-1998, 2001-2019 Free Software Foundation, Inc.
 
 ;; Author: Włodek Bzyl
 ;;	   Ryszard Kubiak
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: i18n
 
 ;; This file is part of GNU Emacs.

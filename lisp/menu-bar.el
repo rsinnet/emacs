@@ -1,9 +1,8 @@
 ;;; menu-bar.el --- define a default menu bar
 
-;; Copyright (C) 1993-1995, 2000-2018 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1995, 2000-2019 Free Software Foundation, Inc.
 
 ;; Author: Richard M. Stallman
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: internal, mouse
 ;; Package: emacs
 
@@ -277,6 +276,15 @@
 ;; The Edit->Search->Incremental Search menu
 (defvar menu-bar-i-search-menu
   (let ((menu (make-sparse-keymap "Incremental Search")))
+    (bindings--define-key menu [isearch-forward-symbol-at-point]
+      '(menu-item "Forward Symbol at Point..." isearch-forward-symbol-at-point
+        :help "Search forward for a symbol found at point"))
+    (bindings--define-key menu [isearch-forward-symbol]
+      '(menu-item "Forward Symbol..." isearch-forward-symbol
+        :help "Search forward for a symbol as you type it"))
+    (bindings--define-key menu [isearch-forward-word]
+      '(menu-item "Forward Word..." isearch-forward-word
+        :help "Search forward for a word as you type it"))
     (bindings--define-key menu [isearch-backward-regexp]
       '(menu-item "Backward Regexp..." isearch-backward-regexp
         :help "Search backwards for a regular expression as you type it"))
@@ -300,7 +308,7 @@
       menu-bar-separator)
 
     (bindings--define-key menu [tags-continue]
-      '(menu-item "Continue Tags Search" tags-loop-continue
+      '(menu-item "Continue Tags Search" fileloop-continue
                   :help "Continue last tags search operation"))
     (bindings--define-key menu [tags-srch]
       '(menu-item "Search Tagged Files..." tags-search
@@ -349,7 +357,7 @@
 (defvar menu-bar-replace-menu
   (let ((menu (make-sparse-keymap "Replace")))
     (bindings--define-key menu [tags-repl-continue]
-      '(menu-item "Continue Replace" tags-loop-continue
+      '(menu-item "Continue Replace" fileloop-continue
                   :help "Continue last tags replace operation"))
     (bindings--define-key menu [tags-repl]
       '(menu-item "Replace in Tagged Files..." tags-query-replace
@@ -423,15 +431,15 @@
   (let ((menu (make-sparse-keymap "Edit")))
 
     (bindings--define-key menu [props]
-      `(menu-item "Text Properties" facemenu-menu))
+      '(menu-item "Text Properties" facemenu-menu))
 
     ;; ns-win.el said: Add spell for platform consistency.
     (if (featurep 'ns)
         (bindings--define-key menu [spell]
-          `(menu-item "Spell" ispell-menu-map)))
+          '(menu-item "Spell" ispell-menu-map)))
 
     (bindings--define-key menu [fill]
-      `(menu-item "Fill" fill-region
+      '(menu-item "Fill" fill-region
                   :enable (and mark-active (not buffer-read-only))
                   :help
                   "Fill text in region to fit between left and right margin"))
@@ -440,7 +448,7 @@
       menu-bar-separator)
 
     (bindings--define-key menu [bookmark]
-      `(menu-item "Bookmarks" menu-bar-bookmark-map))
+      '(menu-item "Bookmarks" menu-bar-bookmark-map))
 
     (bindings--define-key menu [goto]
       `(menu-item "Go To" ,menu-bar-goto-menu))
@@ -689,7 +697,7 @@ The selected font will be the default on both the existing and future frames."
 		   debug-on-quit debug-on-error
 		   ;; Somehow this works, when tool-bar and menu-bar don't.
 		   tooltip-mode window-divider-mode
-		   save-place uniquify-buffer-name-style fringe-mode
+		   save-place-mode uniquify-buffer-name-style fringe-mode
 		   indicate-empty-lines indicate-buffer-boundaries
 		   case-fold-search font-use-system-font
 		   current-language-environment default-input-method
@@ -1409,7 +1417,7 @@ mail status in mode line"))
 
     (bindings--define-key menu [save-place]
       (menu-bar-make-toggle
-       toggle-save-place-globally save-place
+       toggle-save-place-globally save-place-mode
        "Save Place in Files between Sessions"
        "Saving place in files %s"
        "Visit files of previous session when restarting Emacs"
@@ -1417,7 +1425,7 @@ mail status in mode line"))
        ;; Do it by name, to avoid a free-variable
        ;; warning during byte compilation.
        (set-default
-	'save-place (not (symbol-value 'save-place)))))
+	'save-place-mode (not (symbol-value 'save-place-mode)))))
 
     (bindings--define-key menu [uniquify]
       (menu-bar-make-toggle
@@ -2421,7 +2429,7 @@ form ((XOFFSET YOFFSET) WINDOW), or nil.
 If nil, the current mouse position is used, or nil if there is no mouse."
   (pcase position
     ;; nil -> mouse cursor position
-    (`nil
+    ('nil
      (let ((mp (mouse-pixel-position)))
        (list (list (cadr mp) (cddr mp)) (car mp))))
     ;; Value returned from `event-end' or `posn-at-point'.

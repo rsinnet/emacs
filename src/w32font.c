@@ -1,5 +1,5 @@
 /* Font backend for the Microsoft Windows API.
-   Copyright (C) 2007-2018 Free Software Foundation, Inc.
+   Copyright (C) 2007-2019 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -32,6 +32,8 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #include "w32common.h"
 #include "w32.h"
 #endif
+
+#include "pdumper.h"
 
 /* Cleartype available on Windows XP, cleartype_natural from XP SP1.
    The latter does not try to fit cleartype smoothed fonts into the
@@ -431,7 +433,7 @@ w32font_encode_char (struct font *font, int c)
    CODE (length NGLYPHS).  Apparently metrics can be NULL, in this
    case just return the overall width.  */
 void
-w32font_text_extents (struct font *font, unsigned *code,
+w32font_text_extents (struct font *font, const unsigned *code,
 		      int nglyphs, struct font_metrics *metrics)
 {
   int i;
@@ -676,7 +678,7 @@ w32font_draw (struct glyph_string *s, int from, int to,
 	 characters, because drawing background with font dimensions
 	 in those cases makes the display illegible.  There's only one
 	 more call to the draw method with with_background set to
-	 true, and that's in x_draw_glyph_string_foreground, when
+	 true, and that's in w32_draw_glyph_string_foreground, when
 	 drawing the cursor, where we have no such heuristics
 	 available.  FIXME.  */
       if (s->first_glyph->type == GLYPHLESS_GLYPH
@@ -702,11 +704,23 @@ w32font_draw (struct glyph_string *s, int from, int to,
       int i;
 
       for (i = 0; i < len; i++)
-	ExtTextOutW (s->hdc, x + i, y, options, NULL,
-		     s->char2b + from + i, 1, NULL);
+	{
+	  WCHAR c = s->char2b[from + i] & 0xFFFF;
+	  ExtTextOutW (s->hdc, x + i, y, options, NULL, &c, 1, NULL);
+	}
     }
   else
-    ExtTextOutW (s->hdc, x, y, options, NULL, s->char2b + from, len, NULL);
+    {
+      /* The number of glyphs in a glyph_string cannot be larger than
+	 the maximum value of the 'used' member of a glyph_row, so we
+	 are OK using alloca here.  */
+      eassert (len <= SHRT_MAX);
+      WCHAR *chars = alloca (len * sizeof (WCHAR));
+      int j;
+      for (j = 0; j < len; j++)
+	chars[j] = s->char2b[from + j] & 0xFFFF;
+      ExtTextOutW (s->hdc, x, y, options, NULL, chars, len, NULL);
+    }
 
   /* Restore clip region.  */
   if (s->num_clips > 0)
@@ -2624,6 +2638,9 @@ struct font_driver w32font_driver =
 
 /* Initialize state that does not change between invocations. This is only
    called when Emacs is dumped.  */
+
+static void syms_of_w32font_for_pdumper (void);
+
 void
 syms_of_w32font (void)
 {
@@ -2803,6 +2820,12 @@ versions of Windows) characters.  */);
 
   defsubr (&Sx_select_font);
 
+  pdumper_do_now_and_after_load (syms_of_w32font_for_pdumper);
+}
+
+static void
+syms_of_w32font_for_pdumper (void)
+{
   register_font_driver (&w32font_driver, NULL);
 }
 

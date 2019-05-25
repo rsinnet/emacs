@@ -1,6 +1,6 @@
 ;;; filenotify-tests.el --- Tests of file notifications  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2013-2018 Free Software Foundation, Inc.
+;; Copyright (C) 2013-2019 Free Software Foundation, Inc.
 
 ;; Author: Michael Albinus <michael.albinus@gmx.de>
 
@@ -30,6 +30,21 @@
 ;; overwrite the default value.  If you want to skip tests accessing a
 ;; remote host, set this environment variable to "/dev/null" or
 ;; whatever is appropriate on your system.
+
+;; For the remote file-notify library, Tramp checks for the existence
+;; of a respective command.  The first command found is used.  In
+;; order to use a dedicated one, the environment variable
+;; $REMOTE_FILE_NOTIFY_LIBRARY shall be set, possible values are
+;; "inotifywait", "gio-monitor" and "gvfs-monitor-dir".
+
+;; Local file-notify libraries are auto-detected during Emacs
+;; configuration.  This can be changed with a respective configuration
+;; argument, like
+;;
+;;   --with-file-notification=inotify
+;;   --with-file-notification=kqueue
+;;   --with-file-notification=gfile
+;;   --with-file-notification=w32
 
 ;; A whole test run can be performed calling the command `file-notify-test-all'.
 
@@ -63,6 +78,12 @@
         (setenv "HOME" (file-name-unquote temporary-file-directory)))
       (format "/mock::%s" temporary-file-directory)))
   "Temporary directory for Tramp tests.")
+
+;; Filter suppressed remote file-notify libraries.
+(when (stringp (getenv "REMOTE_FILE_NOTIFY_LIBRARY"))
+  (dolist (lib '("inotifywait" "gio-monitor" "gvfs-monitor-dir"))
+    (unless (string-equal (getenv "REMOTE_FILE_NOTIFY_LIBRARY") lib)
+      (add-to-list 'tramp-connection-properties `(nil ,lib nil)))))
 
 (defvar file-notify--test-tmpdir nil)
 (defvar file-notify--test-tmpfile nil)
@@ -174,7 +195,8 @@ Return nil when any other file notification watch is still active."
         file-notify--test-events nil
         file-notify--test-monitors nil))
 
-(setq password-cache-expiry nil
+(setq file-notify-debug nil
+      password-cache-expiry nil
       tramp-verbose 0
       tramp-message-show-message nil)
 
@@ -240,15 +262,17 @@ This returns only for the local case and gfilenotify; otherwise it is nil.
                              (gfile-monitor-name file-notify--test-desc)))
           (cdr (assq file-notify--test-desc file-notify--test-monitors))))))
 
-(defmacro file-notify--deftest-remote (test docstring)
-  "Define ert `TEST-remote' for remote files."
+(defmacro file-notify--deftest-remote (test docstring &optional unstable)
+  "Define ert `TEST-remote' for remote files.
+If UNSTABLE is non-nil, the test is tagged as `:unstable'."
   (declare (indent 1))
   `(ert-deftest ,(intern (concat (symbol-name test) "-remote")) ()
      ,docstring
-     :tags '(:expensive-test)
+     :tags (if ,unstable '(:expensive-test :unstable) '(:expensive-test))
      (let* ((temporary-file-directory
 	     file-notify-test-remote-temporary-file-directory)
-	    (ert-test (ert-get-test ',test)))
+	    (ert-test (ert-get-test ',test))
+            vc-handled-backends)
        (skip-unless (file-notify--test-remote-enabled))
        (tramp-cleanup-connection
 	(tramp-dissect-file-name temporary-file-directory) nil 'keep-password)
@@ -426,36 +450,36 @@ This returns only for the local case and gfilenotify; otherwise it is nil.
       ;; harm.  This fails on Cygwin because of timing issues unless a
       ;; long `sit-for' is added before the call to
       ;; `file-notify--test-read-event'.
-    (if (not (eq system-type 'cygwin))
-      (let (results)
-        (cl-flet ((first-callback (event)
-                   (when (eq (nth 1 event) 'deleted) (push 1 results)))
-                  (second-callback (event)
-                   (when (eq (nth 1 event) 'deleted) (push 2 results))))
-          (setq file-notify--test-tmpfile (file-notify--test-make-temp-name))
-          (write-region
-           "any text" nil file-notify--test-tmpfile nil 'no-message)
-          (should
-           (setq file-notify--test-desc
-                 (file-notify-add-watch
-                  file-notify--test-tmpfile
-                  '(change) #'first-callback)))
-          (should
-           (setq file-notify--test-desc1
-                 (file-notify-add-watch
-                  file-notify--test-tmpfile
-                  '(change) #'second-callback)))
-          ;; Remove first watch.
-          (file-notify-rm-watch file-notify--test-desc)
-          ;; Only the second callback shall run.
-	  (file-notify--test-read-event)
-          (delete-file file-notify--test-tmpfile)
-          (file-notify--wait-for-events
-           (file-notify--test-timeout) results)
-          (should (equal results (list 2)))
+      (unless (eq system-type 'cygwin)
+        (let (results)
+          (cl-flet ((first-callback (event)
+                     (when (eq (nth 1 event) 'deleted) (push 1 results)))
+                    (second-callback (event)
+                     (when (eq (nth 1 event) 'deleted) (push 2 results))))
+            (setq file-notify--test-tmpfile (file-notify--test-make-temp-name))
+            (write-region
+             "any text" nil file-notify--test-tmpfile nil 'no-message)
+            (should
+             (setq file-notify--test-desc
+                   (file-notify-add-watch
+                    file-notify--test-tmpfile
+                    '(change) #'first-callback)))
+            (should
+             (setq file-notify--test-desc1
+                   (file-notify-add-watch
+                    file-notify--test-tmpfile
+                    '(change) #'second-callback)))
+            ;; Remove first watch.
+            (file-notify-rm-watch file-notify--test-desc)
+            ;; Only the second callback shall run.
+	    (file-notify--test-read-event)
+            (delete-file file-notify--test-tmpfile)
+            (file-notify--wait-for-events
+             (file-notify--test-timeout) results)
+            (should (equal results (list 2)))
 
-          ;; The environment shall be cleaned up.
-          (file-notify--test-cleanup-p))))
+            ;; The environment shall be cleaned up.
+            (file-notify--test-cleanup-p))))
 
     ;; Cleanup.
     (file-notify--test-cleanup)))
@@ -492,8 +516,9 @@ and the event to `file-notify--test-events'."
     (unless (string-match
 	     (regexp-quote ".#")
 	     (file-notify--event-file-name file-notify--test-event))
-      ;;(message "file-notify--test-event-handler result: %s event: %S"
-               ;;(null (ert-test-failed-p result)) file-notify--test-event)
+      (when file-notify-debug
+        (message "file-notify--test-event-handler result: %s event: %S"
+                 (null (ert-test-failed-p result)) file-notify--test-event))
       (setq file-notify--test-events
 	    (append file-notify--test-events `(,file-notify--test-event))
 	    file-notify--test-results
@@ -657,12 +682,17 @@ delivered."
 	       (file-notify--test-library) "gvfs-monitor-dir.exe")
 	      '((deleted stopped)
 		(created deleted stopped)))
+             ;; On emba, `deleted' and `stopped' events of the
+             ;; directory are not detected.
+             ((getenv "EMACS_EMBA_CI")
+              '(created changed deleted))
 	     ;; There are two `deleted' events, for the file and for
-	     ;; the directory.  Except for cygwin and kqueue.  And
-	     ;; cygwin does not raise a `changed' event.
+	     ;; the directory.  Except for cygwin, kqueue and remote
+	     ;; files.  And cygwin does not raise a `changed' event.
 	     ((eq system-type 'cygwin)
 	      '(created deleted stopped))
-	     ((string-equal (file-notify--test-library) "kqueue")
+	     ((or (string-equal (file-notify--test-library) "kqueue")
+		  (file-remote-p temporary-file-directory))
 	      '(created changed deleted stopped))
 	     (t '(created changed deleted deleted stopped)))
 	  (write-region
@@ -709,6 +739,13 @@ delivered."
 	      '(created created changed changed deleted stopped))
 	     ((string-equal (file-notify--test-library) "kqueue")
 	      '(created changed created changed deleted stopped))
+             ;; On emba, `deleted' and `stopped' events of the
+             ;; directory are not detected.
+             ((getenv "EMACS_EMBA_CI")
+              '(created changed created changed deleted deleted))
+             ;; Remote files return two `deleted' events.
+	     ((file-remote-p temporary-file-directory)
+	      '(created changed created changed deleted deleted stopped))
 	     (t '(created changed created changed
 		  deleted deleted deleted stopped)))
 	  (write-region
@@ -753,13 +790,18 @@ delivered."
 	       (file-notify--test-library) "gvfs-monitor-dir.exe")
 	      '((deleted stopped)
 		(created deleted stopped)))
+             ;; On emba, `deleted' and `stopped' events of the
+             ;; directory are not detected.
+             ((getenv "EMACS_EMBA_CI")
+              '(created changed renamed deleted))
 	     ;; There are two `deleted' events, for the file and for
-	     ;; the directory.  Except for cygwin and kqueue.  And
-	     ;; cygwin raises `created' and `deleted' events instead
-	     ;; of a `renamed' event.
+	     ;; the directory.  Except for cygwin, kqueue and remote
+	     ;; files.  And cygwin raises `created' and `deleted'
+	     ;; events instead of a `renamed' event.
 	     ((eq system-type 'cygwin)
 	      '(created created deleted deleted stopped))
-	     ((string-equal (file-notify--test-library) "kqueue")
+	     ((or (string-equal (file-notify--test-library) "kqueue")
+		  (file-remote-p temporary-file-directory))
 	      '(created changed renamed deleted stopped))
 	     (t '(created changed renamed deleted deleted stopped)))
 	  (write-region
@@ -979,51 +1021,56 @@ delivered."
     (file-notify--test-cleanup))
 
   (unwind-protect
-      (let ((file-notify--test-tmpdir
-	     (make-temp-file "file-notify-test-parent" t)))
-	(should
-	 (setq file-notify--test-tmpfile (file-notify--test-make-temp-name)
-	       file-notify--test-desc
-	       (file-notify-add-watch
-		file-notify--test-tmpdir
-		'(change) #'file-notify--test-event-handler)))
-	(should (file-notify-valid-p file-notify--test-desc))
-	(file-notify--test-with-events
-	 (cond
-	  ;; w32notify does not raise `deleted' and `stopped' events
-	  ;; for the watched directory.
-	  ((string-equal (file-notify--test-library) "w32notify")
-	   '(created changed deleted))
-          ;; gvfs-monitor-dir on cygwin does not detect the `created'
-          ;; event reliably.
-	  ((string-equal (file-notify--test-library) "gvfs-monitor-dir.exe")
-	   '((deleted stopped)
-	     (created deleted stopped)))
-	  ;; There are two `deleted' events, for the file and for the
-	  ;; directory.  Except for cygwin and kqueue.  And cygwin
-	  ;; does not raise a `changed' event.
-	  ((eq system-type 'cygwin)
-	   '(created deleted stopped))
-	  ((string-equal (file-notify--test-library) "kqueue")
-	   '(created changed deleted stopped))
-	  (t '(created changed deleted deleted stopped)))
-	 (write-region
-	  "any text" nil file-notify--test-tmpfile nil 'no-message)
-	 (file-notify--test-read-event)
-	 (delete-directory file-notify--test-tmpdir 'recursive))
-	;; After deleting the parent directory, the descriptor must
-	;; not be valid anymore.
-	(should-not (file-notify-valid-p file-notify--test-desc))
-        ;; w32notify doesn't generate `stopped' events when the parent
-        ;; directory is deleted, which doesn't provide a chance for
-        ;; filenotify.el to remove the descriptor from the internal
-        ;; hash table it maintains.  So we must remove the descriptor
-        ;; manually.
-        (if (string-equal (file-notify--test-library) "w32notify")
-            (file-notify--rm-descriptor file-notify--test-desc))
+      ;; On emba, `deleted' and `stopped' events of the directory are
+      ;; not detected.
+      (unless (getenv "EMACS_EMBA_CI")
+        (let ((file-notify--test-tmpdir
+	       (make-temp-file "file-notify-test-parent" t)))
+	  (should
+	   (setq file-notify--test-tmpfile (file-notify--test-make-temp-name)
+	         file-notify--test-desc
+	         (file-notify-add-watch
+		  file-notify--test-tmpdir
+		  '(change) #'file-notify--test-event-handler)))
+	  (should (file-notify-valid-p file-notify--test-desc))
+	  (file-notify--test-with-events
+	      (cond
+	       ;; w32notify does not raise `deleted' and `stopped'
+	       ;; events for the watched directory.
+	       ((string-equal (file-notify--test-library) "w32notify")
+	        '(created changed deleted))
+               ;; gvfs-monitor-dir on cygwin does not detect the
+               ;; `created' event reliably.
+	       ((string-equal
+                 (file-notify--test-library) "gvfs-monitor-dir.exe")
+	        '((deleted stopped)
+	          (created deleted stopped)))
+	       ;; There are two `deleted' events, for the file and for
+	       ;; the directory.  Except for cygwin, kqueue and remote
+	       ;; files.  And cygwin does not raise a `changed' event.
+	       ((eq system-type 'cygwin)
+	        '(created deleted stopped))
+	       ((or (string-equal (file-notify--test-library) "kqueue")
+		    (file-remote-p temporary-file-directory))
+	        '(created changed deleted stopped))
+	       (t '(created changed deleted deleted stopped)))
+	    (write-region
+	     "any text" nil file-notify--test-tmpfile nil 'no-message)
+	    (file-notify--test-read-event)
+	    (delete-directory file-notify--test-tmpdir 'recursive))
+	  ;; After deleting the parent directory, the descriptor must
+	  ;; not be valid anymore.
+	  (should-not (file-notify-valid-p file-notify--test-desc))
+          ;; w32notify doesn't generate `stopped' events when the
+          ;; parent directory is deleted, which doesn't provide a
+          ;; chance for filenotify.el to remove the descriptor from
+          ;; the internal hash table it maintains.  So we must remove
+          ;; the descriptor manually.
+          (if (string-equal (file-notify--test-library) "w32notify")
+              (file-notify--rm-descriptor file-notify--test-desc))
 
-        ;; The environment shall be cleaned up.
-        (file-notify--test-cleanup-p))
+          ;; The environment shall be cleaned up.
+          (file-notify--test-cleanup-p)))
 
     ;; Cleanup.
     (file-notify--test-cleanup)))
@@ -1061,7 +1108,9 @@ delivered."
     (file-notify--test-cleanup))
 
   (unwind-protect
-      (progn
+      ;; On emba, `deleted' and `stopped' events of the directory are
+      ;; not detected.
+      (unless (getenv "EMACS_EMBA_CI")
 	(should
 	 (setq file-notify--test-tmpfile
 	       (make-temp-file "file-notify-test-parent" t)))
@@ -1150,7 +1199,8 @@ delivered."
             (file-notify--test-read-event)
             (delete-file file)))
         (delete-directory file-notify--test-tmpfile)
-        (if (string-equal (file-notify--test-library) "w32notify")
+        (if (or (string-equal (file-notify--test-library) "w32notify")
+                (getenv "EMACS_EMBA_CI"))
             (file-notify--rm-descriptor file-notify--test-desc))
 
         ;; The environment shall be cleaned up.
@@ -1159,8 +1209,10 @@ delivered."
     ;; Cleanup.
     (file-notify--test-cleanup)))
 
+;; Unpredictable failures, eg https://hydra.nixos.org/build/86016286
 (file-notify--deftest-remote file-notify-test07-many-events
-   "Check that events are not dropped for remote directories.")
+  "Check that events are not dropped for remote directories."
+  (getenv "EMACS_HYDRA_CI"))
 
 (ert-deftest file-notify-test08-backup ()
   "Check that backup keeps file notification."
@@ -1215,7 +1267,8 @@ delivered."
         (file-notify--test-with-events
             (cond
              ;; On cygwin we only get the `changed' event.
-             ((eq system-type 'cygwin) '(changed))
+             ((eq system-type 'cygwin)
+              '(changed))
              (t '(renamed created changed)))
           ;; The file is renamed when creating a backup.  It shall
           ;; still be watched.
@@ -1356,12 +1409,22 @@ the file watch."
                  (cond
 		  ;; w32notify does not raise `deleted' and `stopped'
 		  ;; events for the watched directory.
-                  ((string-equal (file-notify--test-library) "w32notify") '())
+                  ((string-equal (file-notify--test-library) "w32notify")
+                   '())
+                  ;; On emba, `deleted' and `stopped' events of the
+                  ;; directory are not detected.
+                  ((getenv "EMACS_EMBA_CI")
+                   '())
+                  ;; Remote files send just one `stopped' event.
+                  ((file-remote-p temporary-file-directory)
+                   '(stopped))
                   (t '(deleted stopped))))))
           (delete-directory file-notify--test-tmpfile 'recursive))
-        (should-not (file-notify-valid-p file-notify--test-desc1))
-        (should-not (file-notify-valid-p file-notify--test-desc2))
-        (when (string-equal (file-notify--test-library) "w32notify")
+        (unless (getenv "EMACS_EMBA_CI")
+          (should-not (file-notify-valid-p file-notify--test-desc1))
+          (should-not (file-notify-valid-p file-notify--test-desc2)))
+        (when (or (string-equal (file-notify--test-library) "w32notify")
+                  (getenv "EMACS_EMBA_CI"))
           (file-notify--rm-descriptor file-notify--test-desc1)
           (file-notify--rm-descriptor file-notify--test-desc2))
 
@@ -1371,8 +1434,8 @@ the file watch."
     ;; Cleanup.
     (file-notify--test-cleanup)))
 
-;(file-notify--deftest-remote file-notify-test09-watched-file-in-watched-dir
-;  "Check `file-notify-test09-watched-file-in-watched-dir' for remote files.")
+(file-notify--deftest-remote file-notify-test09-watched-file-in-watched-dir
+  "Check `file-notify-test09-watched-file-in-watched-dir' for remote files." t)
 
 (ert-deftest file-notify-test10-sufficient-resources ()
   "Check that file notification does not use too many resources."

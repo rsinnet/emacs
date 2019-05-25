@@ -1,9 +1,8 @@
 ;;; erc-log.el --- Logging facilities for ERC.
 
-;; Copyright (C) 2003-2018 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2019 Free Software Foundation, Inc.
 
 ;; Author: Lawrence Mitchell <wence@gmx.li>
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: IRC, chat, client, Internet, logging
 
 ;; Created 2003-04-26

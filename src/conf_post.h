@@ -1,6 +1,6 @@
 /* conf_post.h --- configure.ac includes this via AH_BOTTOM
 
-Copyright (C) 1988, 1993-1994, 1999-2002, 2004-2018 Free Software
+Copyright (C) 1988, 1993-1994, 1999-2002, 2004-2019 Free Software
 Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -55,9 +55,11 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #endif
 
 /* The type of bool bitfields.  Needed to compile Objective-C with
-   standard GCC.  It was also needed to port to pre-C99 compilers,
-   although we don't care about that any more.  */
-#if NS_IMPL_GNUSTEP
+   standard GCC, and to make sure adjacent bool_bf fields are packed
+   into the same 1-, 2-, or 4-byte allocation unit in the MinGW
+   builds.  It was also needed to port to pre-C99 compilers, although
+   we don't care about that any more.  */
+#if NS_IMPL_GNUSTEP || defined __MINGW32__
 typedef unsigned int bool_bf;
 #else
 typedef bool bool_bf;
@@ -71,10 +73,12 @@ typedef bool bool_bf;
 # define __has_attribute(a) __has_attribute_##a
 # define __has_attribute_alloc_size GNUC_PREREQ (4, 3, 0)
 # define __has_attribute_cleanup GNUC_PREREQ (3, 4, 0)
+# define __has_attribute_cold GNUC_PREREQ (4, 3, 0)
 # define __has_attribute_externally_visible GNUC_PREREQ (4, 1, 0)
 # define __has_attribute_no_address_safety_analysis false
 # define __has_attribute_no_sanitize_address GNUC_PREREQ (4, 8, 0)
 # define __has_attribute_no_sanitize_undefined GNUC_PREREQ (4, 9, 0)
+# define __has_attribute_warn_unused_result GNUC_PREREQ (3, 4, 0)
 #endif
 
 /* Simulate __has_feature on compilers that lack it.  It is used only
@@ -90,13 +94,11 @@ typedef bool bool_bf;
 # define ADDRESS_SANITIZER false
 #endif
 
-#ifdef DARWIN_OS
-#if defined emacs && !defined CANNOT_DUMP
-#define malloc unexec_malloc
-#define realloc unexec_realloc
-#define free unexec_free
+#if defined DARWIN_OS && defined emacs && defined HAVE_UNEXEC
+# define malloc unexec_malloc
+# define realloc unexec_realloc
+# define free unexec_free
 #endif
-#endif  /* DARWIN_OS */
 
 /* If HYBRID_MALLOC is defined (e.g., on Cygwin), emacs will use
    gmalloc before dumping and the system malloc after dumping.
@@ -223,6 +225,14 @@ extern void _DebPrint (const char *fmt, ...);
 extern char *emacs_getenv_TZ (void);
 extern int emacs_setenv_TZ (char const *);
 
+/* Avoid __attribute__ ((cold)) on MinGW; see thread starting at
+   <https://lists.gnu.org/r/emacs-devel/2019-04/msg01152.html>. */
+#if __has_attribute (cold) && !defined __MINGW32__
+# define ATTRIBUTE_COLD __attribute__ ((cold))
+#else
+# define ATTRIBUTE_COLD
+#endif
+
 #if __GNUC__ >= 3  /* On GCC 3.0 we might get a warning.  */
 #define NO_INLINE __attribute__((noinline))
 #else
@@ -297,8 +307,10 @@ extern int emacs_setenv_TZ (char const *);
 
 #if 3 <= __GNUC__
 # define ATTRIBUTE_MALLOC __attribute__ ((__malloc__))
+# define ATTRIBUTE_SECTION(name) __attribute__((section (name)))
 #else
 # define ATTRIBUTE_MALLOC
+#define ATTRIBUTE_SECTION(name)
 #endif
 
 #if __has_attribute (alloc_size)

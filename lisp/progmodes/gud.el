@@ -1,10 +1,9 @@
 ;;; gud.el --- Grand Unified Debugger mode for running GDB and other debuggers  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1992-1996, 1998, 2000-2018 Free Software Foundation,
+;; Copyright (C) 1992-1996, 1998, 2000-2019 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Eric S. Raymond <esr@snark.thyrsus.com>
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: unix, tools
 
 ;; This file is part of GNU Emacs.
@@ -545,8 +544,8 @@ required by the caller."
 		   nil
 		   (if gdb-show-changed-values
 		       (or parent (pcase status
-				    (`changed 'font-lock-warning-face)
-				    (`out-of-scope 'shadow)
+				    ('changed 'font-lock-warning-face)
+				    ('out-of-scope 'shadow)
 				    (_ t)))
 		     t)
 		   depth)
@@ -566,8 +565,8 @@ required by the caller."
 		     nil
 		     (if gdb-show-changed-values
 			 (or parent (pcase status
-				      (`changed 'font-lock-warning-face)
-				      (`out-of-scope 'shadow)
+				      ('changed 'font-lock-warning-face)
+				      ('out-of-scope 'shadow)
 				      (_ t)))
 		       t)
 		     depth)
@@ -678,7 +677,7 @@ The option \"--fullname\" must be included in this value."
     ;; gud-marker-acc until we receive the rest of it.  Since we
     ;; know the full marker regexp above failed, it's pretty simple to
     ;; test for marker starts.
-    (if (string-match "\n\\(\032.*\\)?\\'" gud-marker-acc)
+    (if (string-match "\\(\n\\)?\\(\032.*\\)?\\'" gud-marker-acc)
 	(progn
 	  ;; Everything before the potential marker start can be output.
 	  (setq output (concat output (substring gud-marker-acc
@@ -2237,7 +2236,7 @@ relative to a classpath directory."
 		    (split-string
 		     ;; Eliminate any subclass references in the class
 		     ;; name string. These start with a "$"
-                     (if (string-match "$.*" p)
+                     (if (string-match "\\$.*" p)
                          (replace-match "" t t p) p)
 		     "\\.") "/")
 	 ".java"))
@@ -3516,11 +3515,11 @@ With arg, dereference expr if ARG is positive, otherwise do not dereference."
 (defun gud-tooltip-print-command (expr)
   "Return a suitable command to print the expression EXPR."
   (pcase gud-minor-mode
-    (`gdbmi (concat "-data-evaluate-expression \"" expr "\""))
-    (`guiler expr)
-    (`dbx (concat "print " expr))
-    ((or `xdb `pdb) (concat "p " expr))
-    (`sdb (concat expr "/"))))
+    ('gdbmi (concat "-data-evaluate-expression \"" expr "\""))
+    ('guiler expr)
+    ('dbx (concat "print " expr))
+    ((or 'xdb 'pdb) (concat "p " expr))
+    ('sdb (concat expr "/"))))
 
 (declare-function gdb-input "gdb-mi" (command handler &optional trigger))
 (declare-function tooltip-expr-to-print "tooltip" (event))

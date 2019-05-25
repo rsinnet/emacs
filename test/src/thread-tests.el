@@ -1,6 +1,6 @@
 ;;; threads.el --- tests for threads.
 
-;; Copyright (C) 2012-2018 Free Software Foundation, Inc.
+;; Copyright (C) 2012-2019 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -387,5 +387,9 @@
     ;; Make sure the thread died.
     (should (= (length (all-threads)) 1))
     (should (equal (thread-last-error) '(error "Die, die, die!")))))
+
+(ert-deftest threads-test-bug33073 ()
+  (let ((th (make-thread 'ignore)))
+    (should-not (equal th main-thread))))
 
 ;;; threads.el ends here

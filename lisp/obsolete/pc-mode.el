@@ -1,8 +1,7 @@
 ;;; pc-mode.el --- emulate certain key bindings used on PCs
 
-;; Copyright (C) 1995, 2001-2018 Free Software Foundation, Inc.
+;; Copyright (C) 1995, 2001-2019 Free Software Foundation, Inc.
 
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: emulations
 ;; Obsolete-since: 24.1
 

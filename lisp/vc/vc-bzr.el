@@ -1,10 +1,9 @@
 ;;; vc-bzr.el --- VC backend for the bzr revision control system  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2006-2018 Free Software Foundation, Inc.
+;; Copyright (C) 2006-2019 Free Software Foundation, Inc.
 
 ;; Author: Dave Love <fx@gnu.org>
 ;; 	   Riccardo Murri <riccardo.murri@gmail.com>
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: vc tools
 ;; Created: Sept 2006
 ;; Package: vc
@@ -268,8 +267,8 @@ in the repository root directory of FILE."
                  ;; If file is in dirstate, can only be added (b#8025).
                  ((or (not (match-beginning 4))
                       (eq (char-after (match-beginning 4)) ?a)) 'added)
-                 ((or (and (eq (string-to-number (match-string 3))
-                               (nth 7 (file-attributes file)))
+                 ((or (and (eql (string-to-number (match-string 3))
+				(file-attribute-size (file-attributes file)))
                            (equal (match-string 5)
                                   (save-match-data (vc-bzr-sha1 file)))
                            ;; For a file, does the executable state match?
@@ -281,7 +280,8 @@ in the repository root directory of FILE."
                                        ?x
                                        (mapcar
                                         'identity
-                                        (nth 8 (file-attributes file))))))
+					(file-attribute-modes
+					 (file-attributes file))))))
                                  (if (eq (char-after (match-beginning 7))
                                          ?y)
                                      exe
@@ -291,8 +291,8 @@ in the repository root directory of FILE."
                        ;; checkouts \2 is empty and we need to
                        ;; look for size in \6.
                        (eq (match-beginning 2) (match-end 2))
-                       (eq (string-to-number (match-string 6))
-                           (nth 7 (file-attributes file)))
+                       (eql (string-to-number (match-string 6))
+                            (file-attribute-size (file-attributes file)))
                        (equal (match-string 5)
                               (vc-bzr-sha1 file))))
                   'up-to-date)
@@ -331,7 +331,7 @@ in the repository root directory of FILE."
          (file-relative-name filename* rootdir))))
 
 (defvar vc-bzr-error-regexp-alist
-  '(("^\\( M[* ]\\|+N \\|-D \\|\\|  \\*\\|R[M ] \\) \\(.+\\)" 2 nil nil 1)
+  '(("^\\( M[* ]\\|\\+N \\|-D \\|\\|  \\*\\|R[M ] \\) \\(.+\\)" 2 nil nil 1)
     ("^C  \\(.+\\)" 2)
     ("^Text conflict in \\(.+\\)" 1 nil nil 2)
     ("^Using saved parent location: \\(.+\\)" 1 nil nil 0))
@@ -694,7 +694,6 @@ or a superior directory.")
 (defvar log-view-message-re)
 (defvar log-view-file-re)
 (defvar log-view-font-lock-keywords)
-(defvar log-view-current-tag-function)
 (defvar log-view-per-file-logs)
 (defvar log-view-expanded-log-entry-function)
 
@@ -702,7 +701,7 @@ or a superior directory.")
   (remove-hook 'log-view-mode-hook 'vc-bzr-log-view-mode) ;Deactivate the hack.
   (require 'add-log)
   (set (make-local-variable 'log-view-per-file-logs) nil)
-  (set (make-local-variable 'log-view-file-re) "\\`a\\`")
+  (set (make-local-variable 'log-view-file-re) regexp-unmatchable)
   (set (make-local-variable 'log-view-message-re)
        (if (eq vc-log-view-type 'short)
 	   "^ *\\([0-9.]+\\): \\(.*?\\)[ \t]+\\([0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}\\)\\( \\[merge\\]\\)?"
@@ -782,7 +781,11 @@ If LIMIT is non-nil, show no more than this many entries."
 (defun vc-bzr-expanded-log-entry (revision)
   (with-temp-buffer
     (apply 'vc-bzr-command "log" t nil nil
-	   (list "--long" (format "-r%s" revision)))
+           (append
+            (list "--long" (format "-r%s" revision))
+            (if (stringp vc-bzr-log-switches)
+                (list vc-bzr-log-switches)
+              vc-bzr-log-switches)))
     (goto-char (point-min))
     (when (looking-at "^-+\n")
       ;; Indent the expanded log entry.
@@ -1243,7 +1246,11 @@ stream.  Standard error output is discarded."
   (let ((vc-bzr-revisions '())
         (default-directory (file-name-directory (car files))))
     (with-temp-buffer
-      (vc-bzr-command "log" t 0 files "--line")
+      (apply 'vc-bzr-command "log" t 0 files
+             (append '("--line")
+                     (if (stringp vc-bzr-log-switches)
+                         (list vc-bzr-log-switches)
+                       vc-bzr-log-switches)))
       (let ((start (point-min))
             (loglines (buffer-substring-no-properties (point-min) (point-max))))
         (while (string-match "^\\([0-9]+\\):" loglines)
@@ -1311,7 +1318,8 @@ stream.  Standard error output is discarded."
      ((string-match "\\`annotate:" string)
       (completion-table-with-context
        (substring string 0 (match-end 0))
-       (apply-partially #'completion-table-with-terminator '(":" . "\\`a\\`")
+       (apply-partially #'completion-table-with-terminator
+                        (cons ":" regexp-unmatchable)
                         #'completion-file-name-table)
        (substring string (match-end 0)) pred action))
 

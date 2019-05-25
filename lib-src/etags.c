@@ -28,7 +28,7 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
-Copyright (C) 1984, 1987-1989, 1993-1995, 1998-2018 Free Software
+Copyright (C) 1984, 1987-1989, 1993-1995, 1998-2019 Free Software
 Foundation, Inc.
 
 This file is not considered part of GNU Emacs.
@@ -84,10 +84,7 @@ char pot_etags_version[] = "@(#) pot revision number is 17.38.1.4";
 #  undef DEBUG
 #  define DEBUG true
 #else
-#  define DEBUG  false
-#  ifndef NDEBUG
-#   define NDEBUG		/* disable assert */
-#  endif
+#  define DEBUG false
 #endif
 
 #include <config.h>
@@ -131,11 +128,6 @@ char pot_etags_version[] = "@(#) pot revision number is 17.38.1.4";
 #include <c-strcase.h>
 
 #include <assert.h>
-#ifdef NDEBUG
-# undef  assert			/* some systems have a buggy assert.h */
-# define assert(x) ((void) 0)
-#endif
-
 #include <getopt.h>
 #include <regex.h>
 
@@ -4290,7 +4282,7 @@ Yacc_entries (FILE *inf)
   while (perhaps_more_input (file_pointer)				\
 	 && (readline (&(line_buffer), file_pointer),			\
 	     (char_pointer) = (line_buffer).buffer,			\
-	     true))							\
+	     true))
 
 #define LOOKING_AT(cp, kw)  /* kw is the keyword, a literal string */	\
   ((assert ("" kw), true)   /* syntax error if not a literal string */	\

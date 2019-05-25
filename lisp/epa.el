@@ -1,6 +1,6 @@
 ;;; epa.el --- the EasyPG Assistant -*- lexical-binding: t -*-
 
-;; Copyright (C) 2006-2018 Free Software Foundation, Inc.
+;; Copyright (C) 2006-2019 Free Software Foundation, Inc.
 
 ;; Author: Daiki Ueno <ueno@unixuser.org>
 ;; Keywords: PGP, GnuPG
@@ -597,12 +597,12 @@ If SECRET is non-nil, list secret keys instead of public keys."
 	    (erase-buffer)
 	    (insert (format
 		     (pcase (epg-context-operation context)
-		       (`decrypt "Error while decrypting with \"%s\":")
-		       (`verify "Error while verifying with \"%s\":")
-		       (`sign "Error while signing with \"%s\":")
-		       (`encrypt "Error while encrypting with \"%s\":")
-		       (`import-keys "Error while importing keys with \"%s\":")
-		       (`export-keys "Error while exporting keys with \"%s\":")
+		       ('decrypt "Error while decrypting with \"%s\":")
+		       ('verify "Error while verifying with \"%s\":")
+		       ('sign "Error while signing with \"%s\":")
+		       ('encrypt "Error while encrypting with \"%s\":")
+		       ('import-keys "Error while importing keys with \"%s\":")
+		       ('export-keys "Error while exporting keys with \"%s\":")
 		       (_ "Error while executing \"%s\":\n\n"))
 		     (epg-context-program context))
 		    "\n\n"
@@ -1281,29 +1281,6 @@ If no one is selected, default public key is exported.  ")))
       (error
        (epa-display-error context)
        (signal (car error) (cdr error))))))
-
-;; (defun epa-sign-keys (keys &optional local)
-;;   "Sign selected KEYS.
-;; If a prefix-arg is specified, the signature is marked as non exportable.
-
-;; Don't use this command in Lisp programs!"
-;;   (declare (interactive-only t))
-;;   (interactive
-;;    (let ((keys (epa--marked-keys)))
-;;      (unless keys
-;;        (error "No keys selected"))
-;;      (list keys current-prefix-arg)))
-;;   (let ((context (epg-make-context epa-protocol)))
-;;     (epg-context-set-passphrase-callback context
-;; 	                                    #'epa-passphrase-callback-function)
-;;     (epg-context-set-progress-callback context
-;; 	                                  (cons
-;; 	                                    #'epa-progress-callback-function
-;; 	                                    "Signing keys..."))
-;;     (message "Signing keys...")
-;;     (epg-sign-keys context keys local)
-;;     (message "Signing keys...done")))
-;; (make-obsolete 'epa-sign-keys "Do not use.")
 
 (provide 'epa)
 

@@ -1,5 +1,5 @@
 /* Interfaces to system-dependent kernel and library entries.
-   Copyright (C) 1985-1988, 1993-1995, 1999-2018 Free Software
+   Copyright (C) 1985-1988, 1993-1995, 1999-2019 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -91,13 +91,19 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #include <sys/file.h>
 #include <fcntl.h>
 
+#include "syssignal.h"
+#include "systime.h"
 #include "systty.h"
 #include "syswait.h"
 
+#ifdef HAVE_SYS_RESOURCE_H
+# include <sys/resource.h>
+#endif
+
 #ifdef HAVE_SYS_UTSNAME_H
-#include <sys/utsname.h>
-#include <memory.h>
-#endif /* HAVE_SYS_UTSNAME_H */
+# include <sys/utsname.h>
+# include <memory.h>
+#endif
 
 #include "keyboard.h"
 #include "frame.h"
@@ -118,17 +124,14 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #endif
 
 #ifdef WINDOWSNT
-#include <direct.h>
+# include <direct.h>
 /* In process.h which conflicts with the local copy.  */
-#define _P_WAIT 0
+# define _P_WAIT 0
 int _cdecl _spawnlp (int, const char *, const char *, ...);
 /* The following is needed for O_CLOEXEC, F_SETFD, FD_CLOEXEC, and
    several prototypes of functions called below.  */
-#include <sys/socket.h>
+# include <sys/socket.h>
 #endif
-
-#include "syssignal.h"
-#include "systime.h"
 
 /* ULLONG_MAX is missing on Red Hat Linux 7.3; see Bug#11781.  */
 #ifndef ULLONG_MAX
@@ -147,22 +150,52 @@ static const int baud_convert[] =
 #ifdef HAVE_PERSONALITY_ADDR_NO_RANDOMIZE
 # include <sys/personality.h>
 
-/* Disable address randomization in the current process.  Return true
-   if addresses were randomized but this has been disabled, false
-   otherwise. */
-bool
-disable_address_randomization (void)
-{
-  int pers = personality (0xffffffff);
-  if (pers < 0)
-    return false;
-  int desired_pers = pers | ADDR_NO_RANDOMIZE;
+/* If not -1, the personality that should be restored before exec.  */
+static int exec_personality;
 
-  /* Call 'personality' twice, to detect buggy platforms like WSL
-     where 'personality' always returns 0.  */
-  return (pers != desired_pers
-	  && personality (desired_pers) == pers
-	  && personality (0xffffffff) == desired_pers);
+/* Try to disable randomization if the current process needs it and
+   does not appear to have it already.  */
+int
+maybe_disable_address_randomization (bool dumping, int argc, char **argv)
+{
+  /* Undocumented Emacs option used only by this function.  */
+  static char const aslr_disabled_option[] = "--__aslr-disabled";
+
+  if (argc < 2 || strcmp (argv[1], aslr_disabled_option) != 0)
+    {
+      bool disable_aslr = dumping;
+# ifdef __PPC64__
+      disable_aslr = true;
+# endif
+      exec_personality = disable_aslr ? personality (0xffffffff) : -1;
+      if (exec_personality & ADDR_NO_RANDOMIZE)
+	exec_personality = -1;
+      if (exec_personality != -1
+	  && personality (exec_personality | ADDR_NO_RANDOMIZE) != -1)
+	{
+	  char **newargv = malloc ((argc + 2) * sizeof *newargv);
+	  if (newargv)
+	    {
+	      /* Invoke self with undocumented option.  */
+	      newargv[0] = argv[0];
+	      newargv[1] = (char *) aslr_disabled_option;
+	      memcpy (&newargv[2], &argv[1], argc * sizeof *newargv);
+	      execvp (newargv[0], newargv);
+	    }
+
+	  /* If malloc or execvp fails, warn and then try anyway.  */
+	  perror (argv[0]);
+	  free (newargv);
+	}
+    }
+  else
+    {
+      /* Our earlier incarnation already disabled ASLR.  */
+      argc--;
+      memmove (&argv[1], &argv[2], argc * sizeof *argv);
+    }
+
+  return argc;
 }
 #endif
 
@@ -174,21 +207,12 @@ int
 emacs_exec_file (char const *file, char *const *argv, char *const *envp)
 {
 #ifdef HAVE_PERSONALITY_ADDR_NO_RANDOMIZE
-  int pers = getenv ("EMACS_HEAP_EXEC") ? personality (0xffffffff) : -1;
-  bool change_personality = 0 <= pers && pers & ADDR_NO_RANDOMIZE;
-  if (change_personality)
-    personality (pers & ~ADDR_NO_RANDOMIZE);
+  if (exec_personality != -1)
+    personality (exec_personality);
 #endif
 
   execve (file, argv, envp);
-  int err = errno;
-
-#ifdef HAVE_PERSONALITY_ADDR_NO_RANDOMIZE
-  if (change_personality)
-    personality (pers);
-#endif
-
-  return err;
+  return errno;
 }
 
 /* If FD is not already open, arrange for it to be open with FLAGS.  */
@@ -233,12 +257,12 @@ get_current_dir_name_or_unreachable (void)
 
   char *pwd;
 
-  /* The maximum size of a directory name, including the terminating null.
+  /* The maximum size of a directory name, including the terminating NUL.
      Leave room so that the caller can append a trailing slash.  */
   ptrdiff_t dirsize_max = min (PTRDIFF_MAX, SIZE_MAX) - 1;
 
   /* The maximum size of a buffer for a file name, including the
-     terminating null.  This is bounded by MAXPATHLEN, if available.  */
+     terminating NUL.  This is bounded by MAXPATHLEN, if available.  */
   ptrdiff_t bufsize_max = dirsize_max;
 #ifdef MAXPATHLEN
   bufsize_max = min (bufsize_max, MAXPATHLEN);
@@ -246,7 +270,7 @@ get_current_dir_name_or_unreachable (void)
 
 # if HAVE_GET_CURRENT_DIR_NAME && !BROKEN_GET_CURRENT_DIR_NAME
 #  ifdef HYBRID_MALLOC
-  bool use_libc = bss_sbrk_did_unexec;
+  bool use_libc = will_dump_with_unexec_p ();
 #  else
   bool use_libc = true;
 #  endif
@@ -1496,18 +1520,18 @@ reset_sys_modes (struct tty_display_info *tty_out)
     tty_out->terminal->reset_terminal_modes_hook (tty_out->terminal);
 
   /* Avoid possible loss of output when changing terminal modes.  */
-  while (fdatasync (fileno (tty_out->output)) != 0 && errno == EINTR)
+  while (tcdrain (fileno (tty_out->output)) != 0 && errno == EINTR)
     continue;
 
 #ifndef DOS_NT
-#ifdef F_SETOWN
+# ifdef F_SETOWN
   if (interrupt_input)
     {
       reset_sigio (fileno (tty_out->input));
       fcntl (fileno (tty_out->input), F_SETOWN,
              old_fcntl_owner[fileno (tty_out->input)]);
     }
-#endif /* F_SETOWN */
+# endif /* F_SETOWN */
   fcntl (fileno (tty_out->input), F_SETFL,
          fcntl (fileno (tty_out->input), F_GETFL, 0) & ~O_NONBLOCK);
 #endif
@@ -1781,7 +1805,7 @@ deliver_fatal_thread_signal (int sig)
   deliver_thread_signal (sig, handle_fatal_signal);
 }
 
-static _Noreturn void
+static AVOID
 handle_arith_signal (int sig)
 {
   pthread_sigmask (SIG_SETMASK, &empty_mask, 0);
@@ -1826,8 +1850,8 @@ stack_overflow (siginfo_t *siginfo)
 
   /* The known top and bottom of the stack.  The actual stack may
      extend a bit beyond these boundaries.  */
-  char *bot = stack_bottom;
-  char *top = current_thread->stack_top;
+  char const *bot = stack_bottom;
+  char const *top = current_thread->stack_top;
 
   /* Log base 2 of the stack heuristic ratio.  This ratio is the size
      of the known stack divided by the size of the guard area past the
@@ -1884,7 +1908,10 @@ init_sigsegv (void)
   sigfillset (&sa.sa_mask);
   sa.sa_sigaction = handle_sigsegv;
   sa.sa_flags = SA_SIGINFO | SA_ONSTACK | emacs_sigaction_flags ();
-  return sigaction (SIGSEGV, &sa, NULL) < 0 ? 0 : 1;
+  if (sigaction (SIGSEGV, &sa, NULL) < 0)
+    return 0;
+
+  return 1;
 }
 
 #else /* not HAVE_STACK_OVERFLOW_HANDLING or WINDOWSNT */
@@ -1939,7 +1966,7 @@ maybe_fatal_sig (int sig)
 }
 
 void
-init_signals (bool dumping)
+init_signals (void)
 {
   struct sigaction thread_fatal_action;
   struct sigaction action;
@@ -2090,7 +2117,7 @@ init_signals (bool dumping)
   /* Don't alter signal handlers if dumping.  On some machines,
      changing signal handlers sets static data that would make signals
      fail to work right when the dumped Emacs is run.  */
-  if (dumping)
+  if (will_dump_p ())
     return;
 
   sigfillset (&process_fatal_action.sa_mask);
@@ -2704,30 +2731,6 @@ emacs_perror (char const *message)
   errno = err;
 }
 
-/* Return a struct timeval that is roughly equivalent to T.
-   Use the least timeval not less than T.
-   Return an extremal value if the result would overflow.  */
-struct timeval
-make_timeval (struct timespec t)
-{
-  struct timeval tv;
-  tv.tv_sec = t.tv_sec;
-  tv.tv_usec = t.tv_nsec / 1000;
-
-  if (t.tv_nsec % 1000 != 0)
-    {
-      if (tv.tv_usec < 999999)
-	tv.tv_usec++;
-      else if (tv.tv_sec < TYPE_MAXIMUM (time_t))
-	{
-	  tv.tv_sec++;
-	  tv.tv_usec = 0;
-	}
-    }
-
-  return tv;
-}
-
 /* Set the access and modification time stamps of FD (a.k.a. FILE) to be
    ATIME and MTIME, respectively.
    FD must be either negative -- in which case it is ignored --
@@ -3067,6 +3070,22 @@ list_system_processes (void)
 }
 
 #endif /* !defined (WINDOWSNT) */
+
+
+#if defined __FreeBSD__ || defined DARWIN_OS
+
+static struct timespec
+timeval_to_timespec (struct timeval t)
+{
+  return make_timespec (t.tv_sec, t.tv_usec * 1000);
+}
+static Lisp_Object
+make_lisp_timeval (struct timeval t)
+{
+  return make_lisp_time (timeval_to_timespec (t));
+}
+
+#endif
 
 #if defined GNU_LINUX && defined HAVE_LONG_LONG_INT
 static struct timespec
@@ -3416,7 +3435,7 @@ system_process_attributes (Lisp_Object pid)
 
       if (nread)
 	{
-	  /* We don't want trailing null characters.  */
+	  /* We don't want trailing NUL characters.  */
 	  for (p = cmdline + nread; cmdline < p && !p[-1]; p--)
 	    continue;
 
@@ -3588,18 +3607,6 @@ system_process_attributes (Lisp_Object pid)
 
 #elif defined __FreeBSD__
 
-static struct timespec
-timeval_to_timespec (struct timeval t)
-{
-  return make_timespec (t.tv_sec, t.tv_usec * 1000);
-}
-
-static Lisp_Object
-make_lisp_timeval (struct timeval t)
-{
-  return make_lisp_time (timeval_to_timespec (t));
-}
-
 Lisp_Object
 system_process_attributes (Lisp_Object pid)
 {
@@ -3769,18 +3776,6 @@ system_process_attributes (Lisp_Object pid)
 
 #elif defined DARWIN_OS
 
-static struct timespec
-timeval_to_timespec (struct timeval t)
-{
-  return make_timespec (t.tv_sec, t.tv_usec * 1000);
-}
-
-static Lisp_Object
-make_lisp_timeval (struct timeval t)
-{
-  return make_lisp_time (timeval_to_timespec (t));
-}
-
 Lisp_Object
 system_process_attributes (Lisp_Object pid)
 {
@@ -3911,6 +3906,42 @@ system_process_attributes (Lisp_Object pid)
 }
 
 #endif	/* !defined (WINDOWSNT) */
+
+DEFUN ("get-internal-run-time", Fget_internal_run_time, Sget_internal_run_time,
+       0, 0, 0,
+       doc: /* Return the current run time used by Emacs.
+The time is returned as in the style of `current-time'.
+
+On systems that can't determine the run time, `get-internal-run-time'
+does the same thing as `current-time'.  */)
+  (void)
+{
+#ifdef HAVE_GETRUSAGE
+  struct rusage usage;
+  time_t secs;
+  int usecs;
+
+  if (getrusage (RUSAGE_SELF, &usage) < 0)
+    /* This shouldn't happen.  What action is appropriate?  */
+    xsignal0 (Qerror);
+
+  /* Sum up user time and system time.  */
+  secs = usage.ru_utime.tv_sec + usage.ru_stime.tv_sec;
+  usecs = usage.ru_utime.tv_usec + usage.ru_stime.tv_usec;
+  if (usecs >= 1000000)
+    {
+      usecs -= 1000000;
+      secs++;
+    }
+  return make_lisp_time (make_timespec (secs, usecs * 1000));
+#else /* ! HAVE_GETRUSAGE  */
+#ifdef WINDOWSNT
+  return w32_get_internal_run_time ();
+#else /* ! WINDOWSNT  */
+  return Fcurrent_time ();
+#endif /* WINDOWSNT  */
+#endif /* HAVE_GETRUSAGE  */
+}
 
 /* Wide character string collation.  */
 
@@ -4116,3 +4147,9 @@ str_collate (Lisp_Object s1, Lisp_Object s2,
   return res;
 }
 #endif	/* WINDOWSNT */
+
+void
+syms_of_sysdep (void)
+{
+  defsubr (&Sget_internal_run_time);
+}

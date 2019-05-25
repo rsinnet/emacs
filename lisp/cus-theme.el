@@ -1,9 +1,8 @@
 ;;; cus-theme.el -- custom theme creation user interface  -*- lexical-binding: t -*-
 ;;
-;; Copyright (C) 2001-2018 Free Software Foundation, Inc.
+;; Copyright (C) 2001-2019 Free Software Foundation, Inc.
 ;;
 ;; Author: Alex Schroeder <alex@gnu.org>
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: help, faces
 ;; Package: emacs
 

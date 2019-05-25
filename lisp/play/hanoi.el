@@ -1,7 +1,6 @@
 ;;; hanoi.el --- towers of hanoi in Emacs
 
 ;; Author: Damon Anton Permezel
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: games
 
 ; Author (a) 1985, Damon Anton Permezel
@@ -381,7 +380,7 @@ BITS must be of length nrings.  Start at START-TIME."
 	(cl-loop for elapsed = (- (float-time) start-time)
                  while (< elapsed hanoi-move-period)
                  with tick-period = (/ (float hanoi-move-period) total-ticks)
-                 for tick = (ceiling (/ elapsed tick-period)) do
+		 for tick = (ceiling elapsed tick-period) do
                  (hanoi-ring-to-pos ring (funcall tick-to-pos tick))
                  (hanoi-sit-for (- (* tick tick-period) elapsed)))
       (cl-loop for tick from 1 to total-ticks by 2 do

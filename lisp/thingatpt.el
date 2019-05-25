@@ -1,9 +1,8 @@
 ;;; thingatpt.el --- get the `thing' at point  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1991-1998, 2000-2018 Free Software Foundation, Inc.
+;; Copyright (C) 1991-1998, 2000-2019 Free Software Foundation, Inc.
 
 ;; Author: Mike Williams <mikew@gopher.dosli.govt.nz>
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: extensions, matching, mouse
 ;; Created: Thu Mar 28 13:48:23 1991
 
@@ -466,11 +465,14 @@ looks like an email address, \"ftp://\" if it starts with
      (while htbs
        (setq htb (car htbs) htbs (cdr htbs))
        (ignore-errors
-	 ;; errs: htb symbol may be unbound, or not a hash-table.
-	 ;; gnus-gethash is just a macro for intern-soft.
-	 (and (symbol-value htb)
-	      (intern-soft string (symbol-value htb))
-	      (setq ret string htbs nil))
+         (setq htb (symbol-value htb))
+	 (when (cond ((obarrayp htb)
+	              (intern-soft string htb))
+                     ((listp htb)
+                      (member string htb))
+                     ((hash-table-p htb)
+                      (gethash string htb)))
+	   (setq ret string htbs nil))
 	 ;; If we made it this far, gnus is running, so ignore "heads":
 	 (setq heads nil)))
      (or ret (not heads)
@@ -582,13 +584,13 @@ See RFC 4122 for the description of the format.")
 
 ;;  Aliases
 
-(defun word-at-point ()
+(defun word-at-point (&optional no-properties)
   "Return the word at point.  See `thing-at-point'."
-  (thing-at-point 'word))
+  (thing-at-point 'word no-properties))
 
-(defun sentence-at-point ()
+(defun sentence-at-point (&optional no-properties)
   "Return the sentence at point.  See `thing-at-point'."
-  (thing-at-point 'sentence))
+  (thing-at-point 'sentence no-properties))
 
 (defun thing-at-point--read-from-whole-string (str)
   "Read a Lisp expression from STR.

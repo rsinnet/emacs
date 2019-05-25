@@ -1,8 +1,6 @@
 ;;; find-gc.el --- detect functions that call the garbage collector
 
-;; Copyright (C) 1992, 2001-2018 Free Software Foundation, Inc.
-
-;; Maintainer: emacs-devel@gnu.org
+;; Copyright (C) 1992, 2001-2019 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 

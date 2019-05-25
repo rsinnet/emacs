@@ -1,9 +1,8 @@
 ;;; rot13.el --- display a buffer in ROT13  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1988, 2001-2018 Free Software Foundation, Inc.
+;; Copyright (C) 1988, 2001-2019 Free Software Foundation, Inc.
 
 ;; Author: Howard Gayle
-;; Maintainer: emacs-devel@gnu.org
 
 ;; This file is part of GNU Emacs.
 

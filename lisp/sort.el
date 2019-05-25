@@ -1,10 +1,9 @@
 ;;; sort.el --- commands to sort text in an Emacs buffer -*- lexical-binding: t -*-
 
-;; Copyright (C) 1986-1987, 1994-1995, 2001-2018 Free Software
+;; Copyright (C) 1986-1987, 1994-1995, 2001-2019 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Howie Kaye
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: unix
 
 ;; This file is part of GNU Emacs.

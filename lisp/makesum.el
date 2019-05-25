@@ -1,8 +1,7 @@
 ;;; makesum.el --- generate key binding summary for Emacs
 
-;; Copyright (C) 1985, 2001-2018 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 2001-2019 Free Software Foundation, Inc.
 
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: help
 
 ;; This file is part of GNU Emacs.

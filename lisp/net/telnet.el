@@ -1,10 +1,9 @@
 ;;; telnet.el --- run a telnet session from within an Emacs buffer
 
-;; Copyright (C) 1985, 1988, 1992, 1994, 2001-2018 Free Software
+;; Copyright (C) 1985, 1988, 1992, 1994, 2001-2019 Free Software
 ;; Foundation, Inc.
 
 ;; Author: William F. Schelter
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: unix, comm
 
 ;; This file is part of GNU Emacs.

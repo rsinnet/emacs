@@ -561,7 +561,7 @@ but common in some proprietary systems."
 ;; maybe some distant mail system needs it.  Really, though, if you
 ;; want a sender line in your mail, just put one in there and don't
 ;; wait for feedmail to do it for you.  (Yes, I know all about
-;; RFC-822 and RFC-1123, but are you *really* one of those cases
+;; RFC-822-or-later and RFC-1123, but are you *really* one of those cases
 ;; they're talking about?  I doubt it.)
 (defcustom feedmail-sender-line nil
   "If non-nil and the email has no Sender: header, use this value.
@@ -787,7 +787,7 @@ cases the name element of the fiddle-plex is ignored and is hardwired
 by feedmail to either \"Date\" or \"Resent-Date\".
 
 If you decide to format your own date field, do us all a favor and know
-what you're doing.  Study the relevant parts of RFC-822 and RFC-1123.
+what you're doing.  Study the relevant parts of RFC-822-or-later and RFC-1123.
 Don't make me come up there!
 
 You should let feedmail generate a Date: for you unless you are sure
@@ -1514,7 +1514,7 @@ function, for example, to archive all of your sent messages someplace
 
 
 (defvar feedmail-is-a-resend nil
-  "Non-nil means the message is a Resend (in the RFC-822 sense).
+  "Non-nil means the message is a Resend (in the RFC-822-or-later sense).
 This affects the composition of certain headers.  feedmail sets this
 variable as soon as it starts prepping the message text buffer, so any
 user-supplied functions can rely on it.  Users shouldn't set or change this
@@ -1657,7 +1657,7 @@ local gurus."
 (declare-function smtp-via-smtp "ext:smtp" (sender recipients smtp-text-buffer))
 (defvar smtp-server)
 
-;; FLIM's smtp.el pointed out to me by Kenichi Handa <handa@etl.go.jp>
+;; FLIM's smtp.el pointed out to me by Kenichi Handa <handa@gnu.org>
 (defun feedmail-buffer-to-smtp (prepped errors-to addr-listoid)
   "Function which actually calls smtp-via-smtp to send buffer as e-mail."
   (feedmail-say-debug ">in-> feedmail-buffer-to-smtp %s" addr-listoid)
@@ -2369,7 +2369,7 @@ mapped to mostly alphanumerics for safety."
 
 (defun feedmail-rfc822-date (arg-time)
   (feedmail-say-debug ">in-> feedmail-rfc822-date %s" arg-time)
-  (let ((time (if arg-time arg-time (current-time)))
+  (let ((time (or arg-time (current-time)))
 	(system-time-locale "C"))
     (concat
      (format-time-string "%a, %e %b %Y %T " time)
@@ -2443,7 +2443,7 @@ mapped to mostly alphanumerics for safety."
 
 	  (let ((case-fold-search t) (addr-regexp))
 	    (goto-char (point-min))
-	    ;; There are some RFC-822 combinations/cases missed here,
+	    ;; There are some RFC-822-or-later combinations/cases missed here,
 	    ;; but probably good enough and what users expect.
 	    ;;
 	    ;; Use resent-* stuff only if there is at least one non-empty one.
@@ -2815,16 +2815,13 @@ return that value."
 (defun feedmail-default-date-generator (maybe-file)
   "Default function for generating Date: header contents."
   (feedmail-say-debug ">in-> feedmail-default-date-generator")
-  (when maybe-file
-    (feedmail-say-debug (concat "4 cre " (feedmail-rfc822-date (nth 4 (file-attributes maybe-file)))))
-    (feedmail-say-debug (concat "5 mod " (feedmail-rfc822-date (nth 5 (file-attributes maybe-file)))))
-    (feedmail-say-debug (concat "6 sta " (feedmail-rfc822-date (nth 6 (file-attributes maybe-file))))))
-  (let ((date-time))
-    (if (and (not feedmail-queue-use-send-time-for-date) maybe-file)
-	(setq date-time (nth 5 (file-attributes maybe-file))))
-    (feedmail-rfc822-date date-time))
-  )
-
+  (let ((attr (and maybe-file (file-attributes maybe-file))))
+    (when attr
+      (feedmail-say-debug (concat "4 cre " (feedmail-rfc822-date (file-attribute-access-time attr))))
+      (feedmail-say-debug (concat "5 mod " (feedmail-rfc822-date (file-attribute-modification-time attr))))
+      (feedmail-say-debug (concat "6 sta " (feedmail-rfc822-date (file-attribute-status-change-time attr)))))
+    (feedmail-rfc822-date (and attr (not feedmail-queue-use-send-time-for-date)
+			       (file-attribute-modification-time attr)))))
 
 (defun feedmail-fiddle-date (maybe-file)
   "Fiddle Date:.  See documentation of `feedmail-date-generator'."
@@ -2874,7 +2871,8 @@ probably not appropriate for you."
 	      (concat (if (equal (match-beginning 1) (match-end 1)) "" "-") end-stuff))
       (setq end-stuff (concat "@" end-stuff)))
     (if (and (not feedmail-queue-use-send-time-for-message-id) maybe-file)
-	(setq date-time (nth 5 (file-attributes maybe-file))))
+	(setq date-time (file-attribute-modification-time
+			 (file-attributes maybe-file))))
     (format "<%d-%s%s%s>"
 	    (mod (random) 10000)
 	    (format-time-string "%a%d%b%Y%H%M%S" date-time)

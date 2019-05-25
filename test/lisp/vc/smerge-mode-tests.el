@@ -1,6 +1,4 @@
-;; Copyright (C) 2017-2018 Free Software Foundation, Inc.
-
-;; Maintainer: emacs-devel@gnu.org
+;; Copyright (C) 2017-2019 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 

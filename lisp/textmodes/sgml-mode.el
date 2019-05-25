@@ -1,10 +1,9 @@
 ;;; sgml-mode.el --- SGML- and HTML-editing modes -*- lexical-binding:t -*-
 
-;; Copyright (C) 1992, 1995-1996, 1998, 2001-2018 Free Software
+;; Copyright (C) 1992, 1995-1996, 1998, 2001-2019 Free Software
 ;; Foundation, Inc.
 
 ;; Author: James Clark <jjc@jclark.com>
-;; Maintainer: emacs-devel@gnu.org
 ;; Adapted-By: ESR, Daniel Pfeiffer <occitan@esperanto.org>,
 ;;             F.Potorti@cnuce.cnr.it
 ;; Keywords: wp, hypermedia, comm, languages
@@ -46,8 +45,7 @@
 
 (defcustom sgml-basic-offset 2
   "Specifies the basic indentation level for `sgml-indent-line'."
-  :type 'integer
-  :group 'sgml)
+  :type 'integer)
 
 (defcustom sgml-attribute-offset 0
   "Specifies a delta for attribute indentation in `sgml-indent-line'.
@@ -65,16 +63,14 @@ When 2, attribute indentation looks like this:
   </element>"
   :version "25.1"
   :type 'integer
-  :safe 'integerp
-  :group 'sgml)
+  :safe 'integerp)
 
 (defcustom sgml-xml-mode nil
   "When non-nil, tag insertion functions will be XML-compliant.
 It is set to be buffer-local when the file has
 a DOCTYPE or an XML declaration."
   :type 'boolean
-  :version "22.1"
-  :group 'sgml)
+  :version "22.1")
 
 (defvaralias 'sgml-transformation 'sgml-transformation-function)
 
@@ -89,8 +85,7 @@ a DOCTYPE or an XML declaration."
                    (and (derived-mode-p 'sgml-mode)
                         (not sgml-xml-mode)
                         (setq skeleton-transformation-function val))))
-               (buffer-list)))
-  :group 'sgml)
+               (buffer-list))))
 
 (put 'sgml-transformation-function 'variable-interactive
      "aTransformation function: ")
@@ -98,27 +93,22 @@ a DOCTYPE or an XML declaration."
 (defcustom sgml-mode-hook nil
   "Hook run by command `sgml-mode'.
 `text-mode-hook' is run first."
-  :group 'sgml
   :type 'hook)
 
-;; As long as Emacs's syntax can't be complemented with predicates to context
-;; sensitively confirm the syntax of characters, we have to live with this
-;; kludgy kind of tradeoff.
-(defvar sgml-specials '(?\")
+;; The official handling of "--" is complicated in SGML, and
+;; historically not well supported by browser HTML parsers.
+;; Recommendations for writing HTML comments is to use <!--...-->
+;; (where ... doesn't contain "--") to avoid the complications
+;; altogether (XML goes even further by requiring this in the spec).
+;; So there is probably no need to handle it "correctly".
+(defvar sgml-specials '(?\" ?\')
   "List of characters that have a special meaning for SGML mode.
 This list is used when first loading the `sgml-mode' library.
-The supported characters and potential disadvantages are:
+The supported characters are ?\\\", ?\\=', and ?-.
 
-  ?\\\"	Makes \" in text start a string.
-  ?\\='	Makes \\=' in text start a string.
-  ?-	Makes -- in text start a comment.
-
-When only one of ?\\\" or ?\\=' are included, \"\\='\" or \\='\"\\=', as can be found in
-DTDs, start a string.  To partially avoid this problem this also makes these
-self insert as named entities depending on `sgml-quick-keys'.
-
-Including ?- has the problem of affecting dashes that have nothing to do
-with comments, so we normally turn it off.")
+Including ?- makes double dashes into comment delimiters, but
+they are really only supposed to delimit comments within DTD
+definitions.  So we normally turn it off.")
 
 (defvar sgml-quick-keys nil
   "Use <, >, &, /, SPC and `sgml-specials' keys \"electrically\" when non-nil.
@@ -211,8 +201,7 @@ This takes effect when first loading the `sgml-mode' library.")
 
 (defcustom sgml-name-8bit-mode nil
   "When non-nil, insert non-ASCII characters as named entities."
-  :type 'boolean
-  :group 'sgml)
+  :type 'boolean)
 
 (defvar sgml-char-names
   [nil nil nil nil nil nil nil nil
@@ -282,8 +271,7 @@ Currently, only Latin-1 characters are supported.")
 The file name of current buffer file name will be appended to this,
 separated by a space."
   :type 'string
-  :version "21.1"
-  :group 'sgml)
+  :version "21.1")
 
 (defvar sgml-saved-validate-command nil
   "The command last used to validate in this buffer.")
@@ -292,8 +280,7 @@ separated by a space."
 ;; so use a small distance here.
 (defcustom sgml-slash-distance 1000
   "If non-nil, is the maximum distance to search for matching `/'."
-  :type '(choice (const nil) integer)
-  :group 'sgml)
+  :type '(choice (const nil) integer))
 
 (defconst sgml-namespace-re "[_[:alpha:]][-_.[:alnum:]]*")
 (defconst sgml-name-re "[_:[:alpha:]][-_.:[:alnum:]]*")
@@ -305,8 +292,7 @@ Any terminating `>' or `/' is not matched.")
 
 (defface sgml-namespace
   '((t (:inherit font-lock-builtin-face)))
-  "`sgml-mode' face used to highlight the namespace part of identifiers."
-  :group 'sgml)
+  "`sgml-mode' face used to highlight the namespace part of identifiers.")
 (defvar sgml-namespace-face 'sgml-namespace)
 
 ;; internal
@@ -342,6 +328,24 @@ Any terminating `>' or `/' is not matched.")
 (defvar sgml-font-lock-keywords sgml-font-lock-keywords-1
   "Rules for highlighting SGML code.  See also `sgml-tag-face-alist'.")
 
+(defvar-local sgml--syntax-propertize-ppss nil)
+
+(defun sgml--syntax-propertize-ppss (pos)
+  "Return PPSS at POS, fixing the syntax of any lone `>' along the way."
+  (cl-assert (>= pos (car sgml--syntax-propertize-ppss)))
+  (let ((ppss (parse-partial-sexp (car sgml--syntax-propertize-ppss) pos -1
+                                  nil (cdr sgml--syntax-propertize-ppss))))
+    (while (eq -1 (car ppss))
+      (put-text-property (1- (point)) (point)
+                         'syntax-table (string-to-syntax "."))
+      ;; Hack attack: rather than recompute the ppss from
+      ;; (car sgml--syntax-propertize-ppss), we manually "fix it".
+      (setcar ppss 0)
+      (setq ppss (parse-partial-sexp (point) pos -1 nil ppss)))
+    (setcdr sgml--syntax-propertize-ppss ppss)
+    (setcar sgml--syntax-propertize-ppss pos)
+    ppss))
+
 (eval-and-compile
   (defconst sgml-syntax-propertize-rules
     (syntax-propertize-precompile-rules
@@ -352,20 +356,34 @@ Any terminating `>' or `/' is not matched.")
      ("--[ \t\n]*\\(>\\)" (1 "> b"))
      ("\\(<\\)[?!]" (1 (prog1 "|>"
                          (sgml-syntax-propertize-inside end))))
-     ;; Double quotes outside of tags should not introduce strings.
-     ;; Be careful to call `syntax-ppss' on a position before the one we're
-     ;; going to change, so as not to need to flush the data we just computed.
-     ("\"" (0 (if (prog1 (zerop (car (syntax-ppss (match-beginning 0))))
-                    (goto-char (match-end 0)))
-                  (string-to-syntax ".")))))))
+     ;; Quotes outside of tags should not introduce strings which end up
+     ;; hiding tags.  We used to test every quote and mark it as "."
+     ;; if it's outside of tags, but there are too many quotes and
+     ;; the resulting number of calls to syntax-ppss made it too slow
+     ;; (bug#33887), so we're now careful to leave alone any pair
+     ;; of quotes that doesn't hold a < or > char, which is the vast majority.
+     ("\\(?:\\(?1:\"\\)[^\"<>]*\\|\\(?1:'\\)[^'\"<>]*\\)"
+      (1 (if (eq (char-after) (char-after (match-beginning 0)))
+             (forward-char 1)
+           ;; Be careful to call `syntax-ppss' on a position before the one
+           ;; we're going to change, so as not to need to flush the data we
+           ;; just computed.
+           (if (zerop (save-excursion
+                        (car (sgml--syntax-propertize-ppss
+                              (match-beginning 0)))))
+               (string-to-syntax ".")))))
+     )))
 
 (defun sgml-syntax-propertize (start end)
   "Syntactic keywords for `sgml-mode'."
-  (goto-char start)
+  (setq sgml--syntax-propertize-ppss (cons start (syntax-ppss start)))
+  (cl-assert (>= (cadr sgml--syntax-propertize-ppss) 0))
   (sgml-syntax-propertize-inside end)
   (funcall
    (syntax-propertize-rules sgml-syntax-propertize-rules)
-   start end))
+   start end)
+  ;; Catch any '>' after the last quote.
+  (sgml--syntax-propertize-ppss end))
 
 (defun sgml-syntax-propertize-inside (end)
   (let ((ppss (syntax-ppss)))
@@ -421,8 +439,7 @@ The attribute alist is made up as
 ATTRIBUTERULE is a list of optionally t (no value when no input) followed by
 an optional alist of possible values."
   :type '(repeat (cons (string :tag "Tag Name")
-		       (repeat :tag "Tag Rule" sexp)))
-  :group 'sgml)
+		       (repeat :tag "Tag Rule" sexp))))
 (put 'sgml-tag-alist 'risky-local-variable t)
 
 (defcustom sgml-tag-help
@@ -434,8 +451,7 @@ an optional alist of possible values."
     ("!entity" . "Entity (macro) declaration"))
   "Alist of tag name and short description."
   :type '(repeat (cons (string :tag "Tag Name")
-		       (string :tag "Description")))
-  :group 'sgml)
+		       (string :tag "Description"))))
 
 (defvar sgml-empty-tags nil
   "List of tags whose !ELEMENT definition says EMPTY.")
@@ -461,7 +477,7 @@ an optional alist of possible values."
 	       nil t)
 	  (string-match "X\\(HT\\)?ML" (match-string 3))))))
 
-(defvar v2)				; free for skeleton
+(with-no-warnings (defvar v2))				; free for skeleton
 
 (defun sgml-comment-indent-new-line (&optional soft)
   (let ((comment-start "-- ")
@@ -896,7 +912,7 @@ Return non-nil if we skipped over matched tags."
   (condition-case err
   (save-excursion
     (goto-char end)
-    (skip-chars-backward "[:alnum:]-_.:")
+    (skip-chars-backward "-[:alnum:]_.:")
     (if (and ;; (<= (point) beg) ; This poses problems for downcase-word.
              (or (eq (char-before) ?<)
                  (and (eq (char-before) ?/)
@@ -904,7 +920,7 @@ Return non-nil if we skipped over matched tags."
              (null (get-char-property (point) 'text-clones)))
         (let* ((endp (eq (char-before) ?/))
                (cl-start (point))
-               (cl-end (progn (skip-chars-forward "[:alnum:]-_.:") (point)))
+	       (cl-end (progn (skip-chars-forward "-[:alnum:]_.:") (point)))
                (match
                 (if endp
                     (when (sgml-skip-tag-backward 1) (forward-char 1) t)
@@ -921,7 +937,8 @@ Return non-nil if we skipped over matched tags."
                      (equal (buffer-substring cl-start cl-end)
                             (buffer-substring (point)
                                               (save-excursion
-                                                (skip-chars-forward "[:alnum:]-_.:")
+						(skip-chars-forward
+						 "-[:alnum:]_.:")
                                                 (point))))
                      (or (not endp) (eq (char-after cl-end) ?>)))
             (when clones
@@ -1524,12 +1541,12 @@ Depending on context, inserts a matching close-tag, or closes
 the current start-tag or the current comment or the current cdata, ..."
   (interactive)
   (pcase (car (sgml-lexical-context))
-    (`comment 	(insert " -->"))
-    (`cdata 	(insert "]]>"))
-    (`pi 	(insert " ?>"))
-    (`jsp 	(insert " %>"))
-    (`tag 	(insert " />"))
-    (`text
+    ('comment 	(insert " -->"))
+    ('cdata 	(insert "]]>"))
+    ('pi 	(insert " ?>"))
+    ('jsp 	(insert " %>"))
+    ('tag 	(insert " />"))
+    ('text
      (let ((context (save-excursion (sgml-get-context))))
        (if context
            (progn
@@ -1562,7 +1579,7 @@ LCON is the lexical context, if any."
 
   (pcase (car lcon)
 
-    (`string
+    ('string
      ;; Go back to previous non-empty line.
      (while (and (> (point) (cdr lcon))
 		 (zerop (forward-line -1))
@@ -1573,7 +1590,7 @@ LCON is the lexical context, if any."
        (goto-char (cdr lcon))
        (1+ (current-column))))
 
-    (`comment
+    ('comment
      (let ((mark (looking-at "--")))
        ;; Go back to previous non-empty line.
        (while (and (> (point) (cdr lcon))
@@ -1592,11 +1609,11 @@ LCON is the lexical context, if any."
        (current-column)))
 
     ;; We don't know how to indent it.  Let's be honest about it.
-    (`cdata nil)
+    ('cdata nil)
     ;; We don't know how to indent it.  Let's be honest about it.
-    (`pi nil)
+    ('pi nil)
 
-    (`tag
+    ('tag
      (goto-char (+ (cdr lcon) sgml-attribute-offset))
      (skip-chars-forward "^ \t\n")	;Skip tag name.
      (skip-chars-forward " \t")
@@ -1606,7 +1623,7 @@ LCON is the lexical context, if any."
        (goto-char (+ (cdr lcon) sgml-attribute-offset))
        (+ (current-column) sgml-basic-offset)))
 
-    (`text
+    ('text
      (while (looking-at "</")
        (sgml-forward-sexp 1)
        (skip-chars-forward " \t"))
@@ -1722,7 +1739,6 @@ Currently just returns (EMPTY-TAGS UNCLOSED-TAGS)."
 (defcustom html-mode-hook nil
   "Hook run by command `html-mode'.
 `text-mode-hook' and `sgml-mode-hook' are run first."
-  :group 'sgml
   :type 'hook
   :options '(html-autoview-mode))
 
@@ -2381,10 +2397,9 @@ HTML Autoview mode is a buffer-local minor mode for use with
 `html-mode'.  If enabled, saving the file automatically runs
 `browse-url-of-buffer' to view it."
   nil nil nil
-  :group 'sgml
   (if html-autoview-mode
-      (add-hook 'after-save-hook 'browse-url-of-buffer nil t)
-    (remove-hook 'after-save-hook 'browse-url-of-buffer t)))
+      (add-hook 'after-save-hook #'browse-url-of-buffer nil t)
+    (remove-hook 'after-save-hook #'browse-url-of-buffer t)))
 
 
 (define-skeleton html-href-anchor

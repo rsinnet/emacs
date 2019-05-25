@@ -1,10 +1,9 @@
 ;;; iso-transl.el --- keyboard input for ISO 10646 chars -*- coding: utf-8 -*-
 
-;; Copyright (C) 1987, 1993-1999, 2001-2018 Free Software Foundation,
+;; Copyright (C) 1987, 1993-1999, 2001-2019 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Howard Gayle
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: i18n
 
 ;; This file is part of GNU Emacs.

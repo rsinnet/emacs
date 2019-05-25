@@ -1,8 +1,7 @@
 ;;; lisp-mode.el --- Lisp mode, and its idiosyncratic commands  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985-1986, 1999-2018 Free Software Foundation, Inc.
+;; Copyright (C) 1985-1986, 1999-2019 Free Software Foundation, Inc.
 
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: lisp, languages
 ;; Package: emacs
 
@@ -839,6 +838,10 @@ by more than one line to cross a string literal."
     (prog1
         (let (indent)
           (cond ((= (forward-line 1) 1) nil)
+                ;; Negative depth, probably some kind of syntax error.
+                ((null indent-stack)
+                 ;; Reset state.
+                 (setq ppss (parse-partial-sexp (point) (point))))
                 ((car indent-stack))
                 ((integerp (setq indent (calculate-lisp-indent ppss)))
                  (setf (car indent-stack) indent))
@@ -1179,7 +1182,6 @@ Lisp function does not specify a special indentation."
 (put 'autoload 'lisp-indent-function 'defun) ;Elisp
 (put 'progn 'lisp-indent-function 0)
 (put 'prog1 'lisp-indent-function 1)
-(put 'prog2 'lisp-indent-function 2)
 (put 'save-excursion 'lisp-indent-function 0)      ;Elisp
 (put 'save-restriction 'lisp-indent-function 0)    ;Elisp
 (put 'save-current-buffer 'lisp-indent-function 0) ;Elisp
@@ -1207,19 +1209,25 @@ ENDPOS is encountered."
                     ;; Get error now if we don't have a complete sexp
                     ;; after point.
                     (save-excursion
+                      (forward-sexp 1)
                       (let ((eol (line-end-position)))
-                        (forward-sexp 1)
                         ;; We actually look for a sexp which ends
                         ;; after the current line so that we properly
                         ;; indent things like #s(...).  This might not
                         ;; be needed if Bug#15998 is fixed.
-                        (condition-case ()
-                            (while (and (< (point) eol) (not (eobp)))
-                              (forward-sexp 1))
-                          ;; But don't signal an error for incomplete
-                          ;; sexps following the first complete sexp
-                          ;; after point.
-                          (scan-error nil)))
+                        (when (and (< (point) eol)
+                                   ;; Check if eol is within a sexp.
+                                   (> (nth 0 (save-excursion
+                                               (parse-partial-sexp
+                                                (point) eol)))
+                                      0))
+                          (condition-case ()
+                              (while (< (point) eol)
+                                (forward-sexp 1))
+                            ;; But don't signal an error for incomplete
+                            ;; sexps following the first complete sexp
+                            ;; after point.
+                            (scan-error nil))))
                       (point)))))
     (save-excursion
       (while (let ((indent (lisp-indent-calc-next parse-state))

@@ -1,12 +1,11 @@
 ;;; avl-tree.el --- balanced binary trees, AVL-trees  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1995, 2007-2018 Free Software Foundation, Inc.
+;; Copyright (C) 1995, 2007-2019 Free Software Foundation, Inc.
 
 ;; Author: Per Cederqvist <ceder@lysator.liu.se>
 ;;         Inge Wallin <inge@lysator.liu.se>
 ;;         Thomas Bellman <bellman@lysator.liu.se>
 ;;         Toby Cubitt <toby-predictive@dr-qubit.org>
-;; Maintainer: emacs-devel@gnu.org
 ;; Created: 10 May 1991
 ;; Keywords: extensions, data structures, AVL, tree
 

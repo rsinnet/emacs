@@ -1,10 +1,9 @@
 ;;; ebuff-menu.el --- electric-buffer-list mode
 
-;; Copyright (C) 1985-1986, 1994, 2001-2018 Free Software Foundation,
+;; Copyright (C) 1985-1986, 1994, 2001-2019 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Richard Mlynarik <mly@ai.mit.edu>
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: convenience
 
 ;; This file is part of GNU Emacs.

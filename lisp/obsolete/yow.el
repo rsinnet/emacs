@@ -1,8 +1,7 @@
 ;;; yow.el --- quote random zippyisms
 
-;; Copyright (C) 1993-1995, 2000-2018 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1995, 2000-2019 Free Software Foundation, Inc.
 
-;; Maintainer: emacs-devel@gnu.org
 ;; Author: Richard Mlynarik
 ;; Keywords: games
 ;; Obsolete-since: 24.4

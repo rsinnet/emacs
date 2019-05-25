@@ -1,5 +1,5 @@
 /* Lisp functions for making directory listings.
-   Copyright (C) 1985-1986, 1993-1994, 1999-2018 Free Software
+   Copyright (C) 1985-1986, 1993-1994, 1999-2019 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -236,6 +236,9 @@ directory_files_internal (Lisp_Object directory, Lisp_Object full,
 #endif
     ;
 
+  if (!NILP (match))
+    CHECK_STRING (match);
+
   /* Loop reading directory entries.  */
   for (struct dirent *dp; (dp = read_dirent (d, directory)); )
     {
@@ -333,7 +336,7 @@ If NOSORT is non-nil, the list is not sorted--its order is unpredictable.
   directory = Fexpand_file_name (directory, Qnil);
 
   /* If the file name has special constructs in it,
-     call the corresponding file handler.  */
+     call the corresponding file name handler.  */
   handler = Ffind_file_name_handler (directory, Qdirectory_files);
   if (!NILP (handler))
     return call5 (handler, Qdirectory_files, directory,
@@ -347,7 +350,7 @@ DEFUN ("directory-files-and-attributes", Fdirectory_files_and_attributes,
        doc: /* Return a list of names of files and their attributes in DIRECTORY.
 Value is a list of the form:
 
-  ((FILE1 FILE1-ATTRS) (FILE2 FILE2-ATTRS) ...)
+  ((FILE1 . FILE1-ATTRS) (FILE2 . FILE2-ATTRS) ...)
 
 where each FILEn-ATTRS is the attributes of FILEn as returned
 by `file-attributes'.
@@ -368,7 +371,7 @@ which see.  */)
   directory = Fexpand_file_name (directory, Qnil);
 
   /* If the file name has special constructs in it,
-     call the corresponding file handler.  */
+     call the corresponding file name handler.  */
   handler = Ffind_file_name_handler (directory, Qdirectory_files_and_attributes);
   if (!NILP (handler))
     return call6 (handler, Qdirectory_files_and_attributes,
@@ -403,13 +406,13 @@ is matched against file and directory names relative to DIRECTORY.  */)
   directory = Fexpand_file_name (directory, Qnil);
 
   /* If the directory name has special constructs in it,
-     call the corresponding file handler.  */
+     call the corresponding file name handler.  */
   handler = Ffind_file_name_handler (directory, Qfile_name_completion);
   if (!NILP (handler))
     return call4 (handler, Qfile_name_completion, file, directory, predicate);
 
   /* If the file name has special constructs in it,
-     call the corresponding file handler.  */
+     call the corresponding file name handler.  */
   handler = Ffind_file_name_handler (file, Qfile_name_completion);
   if (!NILP (handler))
     return call4 (handler, Qfile_name_completion, file, directory, predicate);
@@ -431,13 +434,13 @@ is matched against file and directory names relative to DIRECTORY.  */)
   directory = Fexpand_file_name (directory, Qnil);
 
   /* If the directory name has special constructs in it,
-     call the corresponding file handler.  */
+     call the corresponding file name handler.  */
   handler = Ffind_file_name_handler (directory, Qfile_name_all_completions);
   if (!NILP (handler))
     return call3 (handler, Qfile_name_all_completions, file, directory);
 
   /* If the file name has special constructs in it,
-     call the corresponding file handler.  */
+     call the corresponding file name handler.  */
   handler = Ffind_file_name_handler (file, Qfile_name_all_completions);
   if (!NILP (handler))
     return call3 (handler, Qfile_name_all_completions, file, directory);
@@ -866,26 +869,22 @@ provided: `file-attribute-type', `file-attribute-link-number',
 Elements of the attribute list are:
  0. t for directory, string (name linked to) for symbolic link, or nil.
  1. Number of links to file.
- 2. File uid as a string or a number.  If a string value cannot be
-  looked up, an integer value is returned, which could be a fixnum,
-  if it's small enough, otherwise a bignum.
+ 2. File uid as a string or (if ID-FORMAT is `integer' or a string value
+  cannot be looked up) as an integer.
  3. File gid, likewise.
- 4. Last access time, as a list of integers (HIGH LOW USEC PSEC) in the
-  same style as (current-time).
+ 4. Last access time, in the style of `current-time'.
   (See a note below about access time on FAT-based filesystems.)
  5. Last modification time, likewise.  This is the time of the last
   change to the file's contents.
  6. Last status change time, likewise.  This is the time of last change
   to the file's attributes: owner and group, access mode bits, etc.
- 7. Size in bytes, which could be a fixnum, if it's small enough,
-  otherwise a bignum.
+ 7. Size in bytes, as an integer.
  8. File modes, as a string of ten letters or dashes as in ls -l.
  9. An unspecified value, present only for backward compatibility.
-10. inode number, which could be a fixnum, if it's small enough,
-  otherwise a bignum.
-11. Filesystem device number.  If it is larger than what a fixnum
-  can hold, it is a bignum.
+10. inode number, as a nonnegative integer.
+11. Filesystem device number, as an integer.
 
+Large integers are bignums, so `eq' might not work on them.
 On most filesystems, the combination of the inode and the device
 number uniquely identifies the file.
 
@@ -905,11 +904,12 @@ so last access time will always be midnight of that day.  */)
     return Qnil;
 
   /* If the file name has special constructs in it,
-     call the corresponding file handler.  */
+     call the corresponding file name handler.  */
   handler = Ffind_file_name_handler (filename, Qfile_attributes);
   if (!NILP (handler))
-    { /* Only pass the extra arg if it is used to help backward compatibility
-	 with old file handlers which do not implement the new arg.  --Stef  */
+    { /* Only pass the extra arg if it is used to help backward
+	 compatibility with old file name handlers which do not
+	 implement the new arg.  --Stef */
       if (NILP (id_format))
 	return call2 (handler, Qfile_attributes, filename);
       else
@@ -930,7 +930,7 @@ file_attributes (int fd, char const *name,
   struct stat s;
 
   /* An array to hold the mode string generated by filemodestring,
-     including its terminating space and null byte.  */
+     including its terminating space and NUL byte.  */
   char modes[sizeof "-rwxr-xr-x "];
 
   char *uname = NULL, *gname = NULL;

@@ -1,8 +1,7 @@
 ;;; ledit.el --- Emacs side of ledit interface
 
-;; Copyright (C) 1985, 2001-2018 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 2001-2019 Free Software Foundation, Inc.
 
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: languages
 ;; Obsolete-since: 24.3
 

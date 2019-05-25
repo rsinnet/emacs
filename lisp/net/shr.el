@@ -1,6 +1,6 @@
 ;;; shr.el --- Simple HTML Renderer -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2018 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2019 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: html
@@ -321,9 +321,9 @@ under point instead."
 
 (defun shr-copy-url (url)
   "Copy the URL under point to the kill ring.
-If IMAGE-URL (the prefix) is non-nil, or there is no link under
-point, but there is an image under point then copy the URL of the
-image under point instead."
+With a prefix argument, or if there is no link under point, but
+there is an image under point then copy the URL of the image
+under point instead."
   (interactive (list (shr-url-at-point current-prefix-arg)))
   (if (not url)
       (message "No URL under point")
@@ -1101,8 +1101,7 @@ WIDTH and HEIGHT are the sizes given in the HTML data, if any.
 The size of the displayed image will not exceed
 MAX-WIDTH/MAX-HEIGHT.  If not given, use the current window
 width/height instead."
-  (if (or (not (fboundp 'imagemagick-types))
-          (not (get-buffer-window (current-buffer))))
+  (if (not (get-buffer-window (current-buffer)))
       (create-image data nil t :ascent 100)
     (let* ((edges (window-inside-pixel-edges
                    (get-buffer-window (current-buffer))))
@@ -1123,13 +1122,13 @@ width/height instead."
                (< (* width scaling) max-width)
                (< (* height scaling) max-height))
           (create-image
-           data 'imagemagick t
+           data nil t
            :ascent 100
            :width width
            :height height
            :format content-type)
         (create-image
-         data 'imagemagick t
+         data nil t
          :ascent 100
          :max-width max-width
          :max-height max-height
@@ -1755,7 +1754,14 @@ The preference is a float determined from `shr-prefer-media-type'."
 
 (defun shr-tag-ol (dom)
   (shr-ensure-paragraph)
-  (let ((shr-list-mode 1))
+  (let* ((attrs (dom-attributes dom))
+         (start-attr (alist-get 'start attrs))
+         ;; Start at 1 if there is no start attribute
+         ;; or if start can't be parsed as an integer.
+         (start-index (condition-case _
+                          (cl-parse-integer start-attr)
+                        (t 1)))
+         (shr-list-mode start-index))
     (shr-generic dom))
   (shr-ensure-paragraph))
 
@@ -1783,7 +1789,10 @@ The preference is a float determined from `shr-prefer-media-type'."
 
 (defun shr-mark-fill (start)
   ;; We may not have inserted any text to fill.
-  (unless (= start (point))
+  (when (and (/= start (point))
+             ;; Tables insert themselves with the correct indentation,
+             ;; so don't do anything if we're at the start of a table.
+             (not (get-text-property start 'shr-table-id)))
     (put-text-property start (1+ start)
 		       'shr-indentation shr-indentation)))
 
@@ -2080,7 +2089,8 @@ flags that control whether to collect or render objects."
 			(setq max (max max (nth 2 column))))
 		      max)))
 	(dotimes (_ (max height 1))
-	  (shr-indent)
+          (when (bolp)
+	    (shr-indent))
 	  (insert shr-table-vertical-line "\n"))
 	(dolist (column row)
 	  (when (> (nth 2 column) -1)

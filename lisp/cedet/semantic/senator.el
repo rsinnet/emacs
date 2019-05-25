@@ -1,9 +1,8 @@
 ;;; semantic/senator.el --- SEmantic NAvigaTOR
 
-;; Copyright (C) 2000-2018 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2019 Free Software Foundation, Inc.
 
 ;; Author: David Ponce <david@dponce.com>
-;; Maintainer: emacs-devel@gnu.org
 ;; Created: 10 Nov 2000
 ;; Keywords: syntax
 

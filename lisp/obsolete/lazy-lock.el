@@ -1,9 +1,8 @@
 ;;; lazy-lock.el --- lazy demand-driven fontification for fast Font Lock mode
 
-;; Copyright (C) 1994-1998, 2001-2018 Free Software Foundation, Inc.
+;; Copyright (C) 1994-1998, 2001-2019 Free Software Foundation, Inc.
 
 ;; Author: Simon Marshall <simon@gnu.org>
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: faces files
 ;; Version: 2.11
 ;; Obsolete-since: 22.1

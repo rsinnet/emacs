@@ -1,9 +1,8 @@
 ;;; helper.el --- utility help package supporting help in electric modes
 
-;; Copyright (C) 1985, 2001-2018 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 2001-2019 Free Software Foundation, Inc.
 
 ;; Author: K. Shane Hartman
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: help
 ;; Package: emacs
 

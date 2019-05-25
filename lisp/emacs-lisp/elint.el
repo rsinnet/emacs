@@ -1,6 +1,6 @@
 ;;; elint.el --- Lint Emacs Lisp -*- lexical-binding: t -*-
 
-;; Copyright (C) 1997, 2001-2018 Free Software Foundation, Inc.
+;; Copyright (C) 1997, 2001-2019 Free Software Foundation, Inc.
 
 ;; Author: Peter Liljenberg <petli@lysator.liu.se>
 ;; Created: May 1997
@@ -937,7 +937,7 @@ Does basic handling of `featurep' tests."
 	  ((and (memq func '(unless or))
 		(equal test '(featurep (quote emacs)))))
 	  ((and (eq func 'if)
-		(or (null test)	      ; eg custom-browse-insert-prefix
+		(or (null test)
 		    (member test '((featurep (quote xemacs))
 				   (not (featurep (quote emacs)))))
 		    (and (eq (car-safe test) 'and)

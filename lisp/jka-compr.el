@@ -1,10 +1,9 @@
 ;;; jka-compr.el --- reading/writing/loading compressed files
 
-;; Copyright (C) 1993-1995, 1997, 1999-2018 Free Software Foundation,
+;; Copyright (C) 1993-1995, 1997, 1999-2019 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Jay K. Adams <jka@ece.cmu.edu>
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: data
 
 ;; This file is part of GNU Emacs.

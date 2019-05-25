@@ -1,10 +1,9 @@
 ;;; cmuscheme.el --- Scheme process in a buffer. Adapted from tea.el
 
-;; Copyright (C) 1988, 1994, 1997, 2001-2018 Free Software Foundation,
+;; Copyright (C) 1988, 1994, 1997, 2001-2019 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Olin Shivers <olin.shivers@cs.cmu.edu>
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: processes, lisp
 
 ;; This file is part of GNU Emacs.

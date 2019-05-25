@@ -1,9 +1,8 @@
 ;; erc-goodies.el --- Collection of ERC modules
 
-;; Copyright (C) 2001-2018 Free Software Foundation, Inc.
+;; Copyright (C) 2001-2019 Free Software Foundation, Inc.
 
 ;; Author: Jorgen Schaefer <forcer@forcix.cx>
-;; Maintainer: emacs-devel@gnu.org
 
 ;; Most code is taken verbatim from erc.el, see there for the original
 ;; authors.
@@ -548,7 +547,7 @@ channel that has weird people talking in morse to each other.
 
 See also `unmorse-region'."
   (goto-char (point-min))
-  (when (re-search-forward "[.-]+\\([.-]*/? *\\)+[.-]+/?" nil t)
+  (when (re-search-forward "[.-]+[./ -]*[.-]/?" nil t)
     (save-restriction
       (narrow-to-region (match-beginning 0) (match-end 0))
       ;; Turn " / " into "  "

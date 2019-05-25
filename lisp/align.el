@@ -1,9 +1,8 @@
 ;;; align.el --- align text to a specific column, by regexp -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2018 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2019 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: convenience languages lisp
 
 ;; This file is part of GNU Emacs.
@@ -399,7 +398,7 @@ The possible settings for `align-region-separate' are:
 		   (lambda (end reverse)
 		     (funcall (if reverse 're-search-backward
 				're-search-forward)
-			      (concat "[^ \t\n\\\\]"
+			      (concat "[^ \t\n\\]"
 				      (regexp-quote comment-start)
 				      "\\(.+\\)$") end t))))
      (modes    . align-open-comment-modes))
@@ -411,7 +410,7 @@ The possible settings for `align-region-separate' are:
     (c-variable-declaration
      (regexp   . ,(concat "[*&0-9A-Za-z_]>?[&*]*\\(\\s-+[*&]*\\)"
 			  "[A-Za-z_][0-9A-Za-z:_]*\\s-*\\(\\()\\|"
-			  "=[^=\n].*\\|(.*)\\|\\(\\[.*\\]\\)*\\)?"
+			  "=[^=\n].*\\|(.*)\\|\\(\\[.*\\]\\)*\\)"
 			  "\\s-*[;,]\\|)\\s-*$\\)"))
      (group    . 1)
      (modes    . align-c++-modes)
@@ -438,7 +437,7 @@ The possible settings for `align-region-separate' are:
      (tab-stop . nil))
 
     (perl-assignment
-     (regexp   . ,(concat "[^=!^&*-+<>/| \t\n]\\(\\s-*\\)=[~>]?"
+     (regexp   . ,(concat "[^=!^&*+<>/| \t\n-]\\(\\s-*\\)=[~>]?"
 			  "\\(\\s-*\\)\\([^>= \t\n]\\|$\\)"))
      (group    . (1 2))
      (modes    . align-perl-modes)
@@ -452,7 +451,7 @@ The possible settings for `align-region-separate' are:
      (tab-stop . nil))
 
     (make-assignment
-     (regexp   . "^\\s-*\\w+\\(\\s-*\\):?=\\(\\s-*\\)\\([^\t\n \\\\]\\|$\\)")
+     (regexp   . "^\\s-*\\w+\\(\\s-*\\):?=\\(\\s-*\\)\\([^\t\n \\]\\|$\\)")
      (group    . (1 2))
      (modes    . '(makefile-mode))
      (tab-stop . nil))
@@ -759,7 +758,7 @@ The following attributes are meaningful:
 	  (lambda (end reverse)
 	    (funcall (if reverse 're-search-backward
 		       're-search-forward)
-		     (concat "[^ \t\n\\\\]"
+		     (concat "[^ \t\n\\]"
 			     (regexp-quote comment-start)
 			     "\\(.+\\)$") end t))))
      (modes  . align-open-comment-modes))

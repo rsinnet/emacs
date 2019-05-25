@@ -1,10 +1,9 @@
 ;;; flow-ctrl.el --- help for lusers on cu(1) or ttys with wired-in ^S/^Q flow control
 
-;; Copyright (C) 1990-1991, 1994, 2001-2018 Free Software Foundation,
+;; Copyright (C) 1990-1991, 1994, 2001-2019 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Kevin Gallagher
-;; Maintainer: emacs-devel@gnu.org
 ;; Adapted-By: ESR
 ;; Keywords: hardware
 

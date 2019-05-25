@@ -1,10 +1,9 @@
 ;;; delsel.el --- delete selection if you insert  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1992, 1997-1998, 2001-2018 Free Software Foundation,
+;; Copyright (C) 1992, 1997-1998, 2001-2019 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Matthieu Devin <devin@lucid.com>
-;; Maintainer: emacs-devel@gnu.org
 ;; Created: 14 Jul 92
 ;; Keywords: convenience emulations
 

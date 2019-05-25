@@ -1,9 +1,8 @@
 ;;; subr.el --- basic lisp subroutines for Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985-1986, 1992, 1994-1995, 1999-2018 Free Software
+;; Copyright (C) 1985-1986, 1992, 1994-1995, 1999-2019 Free Software
 ;; Foundation, Inc.
 
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: internal
 ;; Package: emacs
 
@@ -93,12 +92,13 @@ Info node `(elisp)Specification List' for details."
   `(put (quote ,symbol) 'edebug-form-spec (quote ,spec)))
 
 (defmacro lambda (&rest cdr)
-  "Return a lambda expression.
-A call of the form (lambda ARGS DOCSTRING INTERACTIVE BODY) is
-self-quoting; the result of evaluating the lambda expression is the
-expression itself.  The lambda expression may then be treated as a
-function, i.e., stored as the function value of a symbol, passed to
-`funcall' or `mapcar', etc.
+  "Return an anonymous function.
+Under dynamic binding, a call of the form (lambda ARGS DOCSTRING
+INTERACTIVE BODY) is self-quoting; the result of evaluating the
+lambda expression is the expression itself.  Under lexical
+binding, the result is a closure.  Regardless, the result is a
+function, i.e., it may be stored as the function value of a
+symbol, passed to `funcall' or `mapcar', etc.
 
 ARGS should take the same form as an argument list for a `defun'.
 DOCSTRING is an optional documentation string.
@@ -116,6 +116,33 @@ BODY should be a list of Lisp expressions.
   ;; Note that this definition should not use backquotes; subr.el should not
   ;; depend on backquote.el.
   (list 'function (cons 'lambda cdr)))
+
+(defmacro prog2 (form1 form2 &rest body)
+  "Eval FORM1, FORM2 and BODY sequentially; return value from FORM2.
+The value of FORM2 is saved during the evaluation of the
+remaining args, whose values are discarded."
+  (declare (indent 2) (debug t))
+  `(progn ,form1 (prog1 ,form2 ,@body)))
+
+(defmacro setq-default (&rest args)
+  "Set the default value of variable VAR to VALUE.
+VAR, the variable name, is literal (not evaluated);
+VALUE is an expression: it is evaluated and its value returned.
+The default value of a variable is seen in buffers
+that do not have their own values for the variable.
+
+More generally, you can use multiple variables and values, as in
+  (setq-default VAR VALUE VAR VALUE...)
+This sets each VAR's default value to the corresponding VALUE.
+The VALUE for the Nth VAR can refer to the new default values
+of previous VARs.
+
+\(fn [VAR VALUE]...)"
+  (declare (debug setq))
+  (let ((exps nil))
+    (while args
+      (push `(set-default ',(pop args) ,(pop args)) exps))
+    `(progn . ,(nreverse exps))))
 
 (defmacro setq-local (var val)
   "Set variable VAR to value VAL in current buffer."
@@ -552,6 +579,7 @@ i.e., subtract 2 * most-negative-fixnum from VALUE before shifting it."
 If LIST is nil, return nil.
 If N is non-nil, return the Nth-to-last link of LIST.
 If N is bigger than the length of LIST, return LIST."
+  (declare (side-effect-free t))
   (if n
       (and (>= n 0)
            (let ((m (safe-length list)))
@@ -563,6 +591,7 @@ If N is bigger than the length of LIST, return LIST."
   "Return a copy of LIST with the last N elements removed.
 If N is omitted or nil, the last element is removed from the
 copy."
+  (declare (side-effect-free t))
   (if (and n (<= n 0)) list
     (nbutlast (copy-sequence list) n)))
 
@@ -575,6 +604,11 @@ If N is omitted or nil, remove the last element."
 	 (progn
 	   (if (> n 0) (setcdr (nthcdr (- (1- m) n) list) nil))
 	   list))))
+
+;; The function's definition was moved to fns.c,
+;; but it's easier to set properties here.
+(put 'proper-list-p 'pure t)
+(put 'proper-list-p 'side-effect-free 'error-free)
 
 (defun delete-dups (list)
   "Destructively remove `equal' duplicates from LIST.
@@ -693,6 +727,7 @@ If that is non-nil, the element matches; then `assoc-default'
 
 If no element matches, the value is nil.
 If TEST is omitted or nil, `equal' is used."
+  (declare (side-effect-free t))
   (let (found (tail alist) value)
     (while (and tail (not found))
       (let ((elt (car tail)))
@@ -706,6 +741,7 @@ If TEST is omitted or nil, `equal' is used."
 ELT must be a string.  Upper-case and lower-case letters are treated as equal.
 Unibyte strings are converted to multibyte for comparison.
 Non-strings in LIST are ignored."
+  (declare (side-effect-free t))
   (while (and list
 	      (not (and (stringp (car list))
 			(eq t (compare-strings elt 0 nil (car list) 0 nil t)))))
@@ -751,13 +787,35 @@ Elements of ALIST that are not conses are ignored."
   alist)
 
 (defun alist-get (key alist &optional default remove testfn)
-  "Return the value associated with KEY in ALIST.
+  "Find the first element of ALIST whose `car' equals KEY and return its `cdr'.
 If KEY is not found in ALIST, return DEFAULT.
-Use TESTFN to lookup in the alist if non-nil.  Otherwise, use `assq'.
+Equality with KEY is tested by TESTFN, defaulting to `eq'.
 
-This is a generalized variable suitable for use with `setf'.
+You can use `alist-get' in PLACE expressions.  This will modify
+an existing association (more precisely, the first one if
+multiple exist), or add a new element to the beginning of ALIST,
+destructively modifying the list stored in ALIST.
+
+Example:
+
+   (setq foo '((a . 0)))
+   (setf (alist-get 'a foo) 1
+         (alist-get 'b foo) 2)
+
+   foo => ((b . 2) (a . 1))
+
+
 When using it to set a value, optional argument REMOVE non-nil
-means to remove KEY from ALIST if the new value is `eql' to DEFAULT."
+means to remove KEY from ALIST if the new value is `eql' to
+DEFAULT (more precisely the first found association will be
+deleted from the alist).
+
+Example:
+
+  (setq foo '((a . 1) (b . 2)))
+  (setf (alist-get 'b foo nil 'remove) nil)
+
+  foo => ((a . 1))"
   (ignore remove) ;;Silence byte-compiler.
   (let ((x (if (not testfn)
                (assq key alist)
@@ -767,6 +825,7 @@ means to remove KEY from ALIST if the new value is `eql' to DEFAULT."
 (defun remove (elt seq)
   "Return a copy of SEQ with all occurrences of ELT removed.
 SEQ must be a list, vector, or string.  The comparison is done with `equal'."
+  (declare (side-effect-free t))
   (if (nlistp seq)
       ;; If SEQ isn't a list, there's no need to copy SEQ because
       ;; `delete' will return a new object.
@@ -777,6 +836,7 @@ SEQ must be a list, vector, or string.  The comparison is done with `equal'."
   "Return LIST with all occurrences of ELT removed.
 The comparison is done with `eq'.  Contrary to `delq', this does not use
 side-effects, and the argument LIST is not modified."
+  (declare (side-effect-free t))
   (while (and (eq elt (car list)) (setq list (cdr list))))
   (if (memq elt list)
       (delq elt (copy-sequence list))
@@ -1177,12 +1237,14 @@ The normal global definition of the character C-x indirects to this keymap.")
 			  c)))
 	    key)))
 
-(defun eventp (obj)
-  "True if the argument is an event object."
-  (when obj
-    (or (integerp obj)
-        (and (symbolp obj) obj (not (keywordp obj)))
-        (and (consp obj) (symbolp (car obj))))))
+(defun eventp (object)
+  "Return non-nil if OBJECT is an input event or event object."
+  (or (integerp object)
+      (and (if (consp object)
+               (setq object (car object))
+             object)
+           (symbolp object)
+           (not (keywordp object)))))
 
 (defun event-modifiers (event)
   "Return a list of symbols representing the modifier keys in event EVENT.
@@ -1510,6 +1572,8 @@ be a list of the form returned by `event-start' and `event-end'."
 (make-obsolete-variable 'x-gtk-use-window-move nil "26.1")
 
 (defvaralias 'messages-buffer-max-lines 'message-log-max)
+(define-obsolete-variable-alias 'inhibit-null-byte-detection
+  'inhibit-nul-byte-detection "27.1")
 
 ;;;; Alternate names for functions - these are not being phased out.
 
@@ -1918,11 +1982,15 @@ Only affects hooks run in the current buffer."
 ;; PUBLIC: find if the current mode derives from another.
 
 (defun provided-mode-derived-p (mode &rest modes)
-  "Non-nil if MODE is derived from one of MODES.
+  "Non-nil if MODE is derived from one of MODES or their aliases.
 Uses the `derived-mode-parent' property of the symbol to trace backwards.
 If you just want to check `major-mode', use `derived-mode-p'."
-  (while (and (not (memq mode modes))
-              (setq mode (get mode 'derived-mode-parent))))
+  (while
+      (and
+       (not (memq mode modes))
+       (let* ((parent (get mode 'derived-mode-parent))
+              (parentfn (symbol-function parent)))
+         (setq mode (if (and parentfn (symbolp parentfn)) parentfn parent)))))
   mode)
 
 (defun derived-mode-p (&rest modes)
@@ -3180,11 +3248,12 @@ discouraged."
   "Start a program in a subprocess.  Return the process object for it.
 Similar to `start-process-shell-command', but calls `start-file-process'."
   (declare (advertised-calling-convention (name buffer command) "23.1"))
-  (start-file-process
-   name buffer
-   (if (file-remote-p default-directory) "/bin/sh" shell-file-name)
-   (if (file-remote-p default-directory) "-c" shell-command-switch)
-   (mapconcat 'identity args " ")))
+  ;; On remote hosts, the local `shell-file-name' might be useless.
+  (with-connection-local-variables
+   (start-file-process
+    name buffer
+    shell-file-name shell-command-switch
+    (mapconcat 'identity args " "))))
 
 (defun call-process-shell-command (command &optional infile buffer display
 					   &rest args)
@@ -3225,11 +3294,11 @@ discouraged."
 Similar to `call-process-shell-command', but calls `process-file'."
   (declare (advertised-calling-convention
             (command &optional infile buffer display) "24.5"))
-  (process-file
-   (if (file-remote-p default-directory) "/bin/sh" shell-file-name)
-   infile buffer display
-   (if (file-remote-p default-directory) "-c" shell-command-switch)
-   (mapconcat 'identity (cons command args) " ")))
+  ;; On remote hosts, the local `shell-file-name' might be useless.
+  (with-connection-local-variables
+   (process-file
+    shell-file-name infile buffer display shell-command-switch
+    (mapconcat 'identity (cons command args) " "))))
 
 (defun call-shell-region (start end command &optional delete buffer)
   "Send text from START to END as input to an inferior shell running COMMAND.
@@ -3566,7 +3635,7 @@ is allowed once again.  (Immediately, if `inhibit-quit' is nil.)"
 ;; Don't throw `throw-on-input' on those events by default.
 (setq while-no-input-ignore-events
       '(focus-in focus-out help-echo iconify-frame
-        make-frame-visible selection-request))
+        make-frame-visible selection-request buffer-switch))
 
 (defmacro while-no-input (&rest body)
   "Execute BODY only as long as there's no pending input.
@@ -3680,7 +3749,7 @@ the specified region.  It must not change
 `before-change-functions' or `after-change-functions'.
 
 Additionally, the buffer modifications of BODY are recorded on
-the buffer's undo list as a single \(apply ...) entry containing
+the buffer's undo list as a single (apply ...) entry containing
 the function `undo--wrap-and-run-primitive-undo'."
   (let ((old-bul buffer-undo-list)
 	(end-marker (copy-marker end t))
@@ -3693,7 +3762,14 @@ the function `undo--wrap-and-run-primitive-undo'."
 	(if (eq buffer-undo-list t)
 	    (setq result (funcall body))
 	  (let (;; (inhibit-modification-hooks t)
-                before-change-functions after-change-functions)
+                (before-change-functions
+                 ;; Ugly Hack: if the body uses syntax-ppss/syntax-propertize
+                 ;; (e.g. via a regexp-search or sexp-movement trigerring
+                 ;; on-the-fly syntax-propertize), make sure that this gets
+                 ;; properly refreshed after subsequent changes.
+                 (if (memq #'syntax-ppss-flush-cache before-change-functions)
+                     '(syntax-ppss-flush-cache)))
+                after-change-functions)
 	    (setq result (funcall body)))
 	  (let ((ap-elt
 		 (list 'apply
@@ -3829,6 +3905,7 @@ Zero means the entire text matched by the whole regexp or whole string.
 STRING should be given if the last search was by `string-match' on STRING.
 If STRING is nil, the current buffer should be the same buffer
 the search/match was performed in."
+  (declare (side-effect-free t))
   (if (match-beginning num)
       (if string
 	  (substring string (match-beginning num) (match-end num))
@@ -3842,6 +3919,7 @@ Zero means the entire text matched by the whole regexp or whole string.
 STRING should be given if the last search was by `string-match' on STRING.
 If STRING is nil, the current buffer should be the same buffer
 the search/match was performed in."
+  (declare (side-effect-free t))
   (if (match-beginning num)
       (if string
 	  (substring-no-properties string (match-beginning num)
@@ -4810,8 +4888,8 @@ command is called from a keyboard macro?"
                           'called-interactively-p-functions
                           i frame nextframe)))
                (pcase skip
-                 (`nil nil)
-                 (`0 t)
+                 ('nil nil)
+                 (0 t)
                  (_ (setq i (+ i skip -1)) (funcall get-next-frame)))))))
       ;; Now `frame' should be "the function from which we were called".
       (pcase (cons frame nextframe)
@@ -5030,7 +5108,7 @@ NEW-MESSAGE, if non-nil, sets a new message for the reporter."
 	 (enough-time-passed
 	  ;; See if enough time has passed since the last update.
 	  (or (not update-time)
-	      (when (>= (float-time) update-time)
+	      (when (time-less-p update-time nil)
 		;; Calculate time for the next update
 		(aset parameters 0 (+ update-time (aref parameters 5)))))))
     (cond ((and min-value max-value)
@@ -5443,5 +5521,30 @@ This function is called from lisp/Makefile and leim/Makefile."
     (setq file (concat (substring file 1 2) ":" (substring file 2))))
   file)
 
+(defun flatten-tree (tree)
+  "Return a \"flattened\" copy of TREE.
+In other words, return a list of the non-nil terminal nodes, or
+leaves, of the tree of cons cells rooted at TREE.  Leaves in the
+returned list are in the same order as in TREE.
+
+\(flatten-tree \\='(1 (2 . 3) nil (4 5 (6)) 7))
+=> (1 2 3 4 5 6 7)"
+  (let (elems)
+    (while (consp tree)
+      (let ((elem (pop tree)))
+        (while (consp elem)
+          (push (cdr elem) tree)
+          (setq elem (car elem)))
+        (if elem (push elem elems))))
+    (if tree (push tree elems))
+    (nreverse elems)))
+
+;; Technically, `flatten-list' is a misnomer, but we provide it here
+;; for discoverability:
+(defalias 'flatten-list 'flatten-tree)
+
+;; The initial anchoring is for better performance in searching matches.
+(defconst regexp-unmatchable "\\`a\\`"
+  "Standard regexp guaranteed not to match any string at all.")
 
 ;;; subr.el ends here

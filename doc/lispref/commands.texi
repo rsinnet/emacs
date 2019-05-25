@@ -1,6 +1,6 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990-1995, 1998-1999, 2001-2018 Free Software
+@c Copyright (C) 1990-1995, 1998-1999, 2001-2019 Free Software
 @c Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @node Command Loop
@@ -135,6 +135,9 @@ will use directly in its warning (it should end with a period, and not
 start with a capital, e.g., @code{"use (system-name) instead."}); @code{t}; any
 other symbol, which should be an alternative function to use in Lisp
 code.
+
+Generic functions (@pxref{Generic Functions}) cannot be turned into
+commands by adding the @code{interactive} form to them.
 
 @menu
 * Using Interactive::     General rules for @code{interactive}.
@@ -1009,7 +1012,8 @@ If the last event came from a keyboard macro, the value is @code{macro}.
 sequence of text that has the @code{display} or @code{composition}
 property, or is invisible.  Therefore, after a command finishes and
 returns to the command loop, if point is within such a sequence, the
-command loop normally moves point to the edge of the sequence.
+command loop normally moves point to the edge of the sequence, making this
+sequence effectively intangible.
 
   A command can inhibit this feature by setting the variable
 @code{disable-point-adjustment}:
@@ -1043,12 +1047,9 @@ and meaning of input events in detail.
 This function returns non-@code{nil} if @var{object} is an input event
 or event type.
 
-Note that any symbol might be used as an event or an event type.
-@code{eventp} cannot distinguish whether a symbol is intended by Lisp
-code to be used as an event.  Instead, it distinguishes whether the
-symbol has actually been used in an event that has been read as input in
-the current Emacs session.  If a symbol has not yet been so used,
-@code{eventp} returns @code{nil}.
+Note that any non-@code{nil} symbol might be used as an event or an
+event type; @code{eventp} cannot distinguish whether a symbol is
+intended by Lisp code to be used as an event.
 @end defun
 
 @menu
@@ -2876,6 +2877,14 @@ command's key sequence (as returned by, e.g., @code{this-command-keys}),
 as the events will already have been added once as they were read for
 the first time.  An element of the form @w{@code{(t . @var{event})}}
 forces @var{event} to be added to the current command's key sequence.
+
+@cindex not recording input events
+@cindex input events, prevent recording
+Elements read from this list are normally recorded by the
+record-keeping features (@pxref{Recording Input}) and while defining a
+keyboard macro (@pxref{Keyboard Macros}).  However, an element of the
+form @w{@code{(no-record . @var{event})}} causes @var{event} to be
+processed normally without recording it.
 @end defvar
 
 @defun listify-key-sequence key

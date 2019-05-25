@@ -1,8 +1,7 @@
 ;;; tabify.el --- tab conversion commands for Emacs
 
-;; Copyright (C) 1985, 1994, 2001-2018 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 1994, 2001-2019 Free Software Foundation, Inc.
 
-;; Maintainer: emacs-devel@gnu.org
 ;; Package: emacs
 
 ;; This file is part of GNU Emacs.

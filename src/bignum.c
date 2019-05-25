@@ -1,6 +1,6 @@
 /* Big numbers for Emacs.
 
-Copyright 2018 Free Software Foundation, Inc.
+Copyright 2018-2019 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -31,7 +31,7 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
    storage is exhausted.  Admittedly this is not ideal.  An mpz value
    in a temporary is made permanent by mpz_swapping it with a bignum's
    value.  Although typically at most two temporaries are needed,
-   rounding_driver and rounddiv_q need four altogther.  */
+   time_arith, rounddiv_q and rounding_driver each need four.  */
 
 mpz_t mpz[4];
 
@@ -62,7 +62,7 @@ init_bignum (void)
 double
 bignum_to_double (Lisp_Object n)
 {
-  return mpz_get_d (XBIGNUM (n)->value);
+  return mpz_get_d_rounded (XBIGNUM (n)->value);
 }
 
 /* Return D, converted to a Lisp integer.  Discard any fraction.
@@ -86,8 +86,8 @@ make_bignum_bits (size_t bits)
   if (integer_width < bits)
     overflow_error ();
 
-  struct Lisp_Bignum *b = ALLOCATE_PSEUDOVECTOR (struct Lisp_Bignum, value,
-						 PVEC_BIGNUM);
+  struct Lisp_Bignum *b = ALLOCATE_PLAIN_PSEUDOVECTOR (struct Lisp_Bignum,
+						       PVEC_BIGNUM);
   mpz_init (b->value);
   mpz_swap (b->value, mpz[0]);
   return make_lisp_ptr (b, Lisp_Vectorlike);
@@ -99,18 +99,6 @@ static Lisp_Object
 make_bignum (void)
 {
   return make_bignum_bits (mpz_sizeinbase (mpz[0], 2));
-}
-
-static void mpz_set_uintmax_slow (mpz_t, uintmax_t);
-
-/* Set RESULT to V.  */
-static void
-mpz_set_uintmax (mpz_t result, uintmax_t v)
-{
-  if (v <= ULONG_MAX)
-    mpz_set_ui (result, v);
-  else
-    mpz_set_uintmax_slow (result, v);
 }
 
 /* Return a Lisp integer equal to N, which must not be in fixnum range.  */
@@ -126,6 +114,16 @@ make_biguint (uintmax_t n)
 {
   eassert (FIXNUM_OVERFLOW_P (n));
   mpz_set_uintmax (mpz[0], n);
+  return make_bignum ();
+}
+
+/* Return a Lisp integer equal to -N, which must not be in fixnum range.  */
+Lisp_Object
+make_neg_biguint (uintmax_t n)
+{
+  eassert (-MOST_NEGATIVE_FIXNUM < n);
+  mpz_set_uintmax (mpz[0], n);
+  mpz_neg (mpz[0], mpz[0]);
   return make_bignum ();
 }
 
@@ -183,7 +181,7 @@ mpz_set_intmax_slow (mpz_t result, intmax_t v)
 
   mpz_limbs_finish (result, negative ? -n : n);
 }
-static void
+void
 mpz_set_uintmax_slow (mpz_t result, uintmax_t v)
 {
   int maxlimbs = (UINTMAX_WIDTH + GMP_NUMB_BITS - 1) / GMP_NUMB_BITS;
@@ -200,13 +198,13 @@ mpz_set_uintmax_slow (mpz_t result, uintmax_t v)
   mpz_limbs_finish (result, n);
 }
 
-/* Return the value of the bignum X if it fits, 0 otherwise.
-   A bignum cannot be zero, so 0 indicates failure reliably.  */
-intmax_t
-bignum_to_intmax (Lisp_Object x)
+/* If Z fits into *PI, store its value there and return true.
+   Return false otherwise.  */
+bool
+mpz_to_intmax (mpz_t const z, intmax_t *pi)
 {
-  ptrdiff_t bits = mpz_sizeinbase (XBIGNUM (x)->value, 2);
-  bool negative = mpz_sgn (XBIGNUM (x)->value) < 0;
+  ptrdiff_t bits = mpz_sizeinbase (z, 2);
+  bool negative = mpz_sgn (z) < 0;
 
   if (bits < INTMAX_WIDTH)
     {
@@ -215,48 +213,97 @@ bignum_to_intmax (Lisp_Object x)
 
       do
 	{
-	  intmax_t limb = mpz_getlimbn (XBIGNUM (x)->value, i++);
+	  intmax_t limb = mpz_getlimbn (z, i++);
 	  v += limb << shift;
 	  shift += GMP_NUMB_BITS;
 	}
       while (shift < bits);
 
-      return negative ? -v : v;
+      *pi = negative ? -v : v;
+      return true;
     }
-  return ((bits == INTMAX_WIDTH && INTMAX_MIN < -INTMAX_MAX && negative
-	   && mpz_scan1 (XBIGNUM (x)->value, 0) == INTMAX_WIDTH - 1)
-	  ? INTMAX_MIN : 0);
+  if (bits == INTMAX_WIDTH && INTMAX_MIN < -INTMAX_MAX && negative
+      && mpz_scan1 (z, 0) == INTMAX_WIDTH - 1)
+    {
+      *pi = INTMAX_MIN;
+      return true;
+    }
+  return false;
+}
+bool
+mpz_to_uintmax (mpz_t const z, uintmax_t *pi)
+{
+  if (mpz_sgn (z) < 0)
+    return false;
+  ptrdiff_t bits = mpz_sizeinbase (z, 2);
+  if (UINTMAX_WIDTH < bits)
+    return false;
+
+  uintmax_t v = 0;
+  int i = 0, shift = 0;
+
+  do
+    {
+      uintmax_t limb = mpz_getlimbn (z, i++);
+      v += limb << shift;
+      shift += GMP_NUMB_BITS;
+    }
+  while (shift < bits);
+
+  *pi = v;
+  return true;
+}
+
+/* Return the value of the bignum X if it fits, 0 otherwise.
+   A bignum cannot be zero, so 0 indicates failure reliably.  */
+intmax_t
+bignum_to_intmax (Lisp_Object x)
+{
+  intmax_t i;
+  return mpz_to_intmax (XBIGNUM (x)->value, &i) ? i : 0;
 }
 uintmax_t
 bignum_to_uintmax (Lisp_Object x)
 {
-  uintmax_t v = 0;
-  if (0 <= mpz_sgn (XBIGNUM (x)->value))
-    {
-      ptrdiff_t bits = mpz_sizeinbase (XBIGNUM (x)->value, 2);
-      if (bits <= UINTMAX_WIDTH)
-	{
-	  int i = 0, shift = 0;
-
-	  do
-	    {
-	      uintmax_t limb = mpz_getlimbn (XBIGNUM (x)->value, i++);
-	      v += limb << shift;
-	      shift += GMP_NUMB_BITS;
-	    }
-	  while (shift < bits);
-	}
-    }
-  return v;
+  uintmax_t i;
+  return mpz_to_uintmax (XBIGNUM (x)->value, &i) ? i : 0;
 }
 
 /* Yield an upper bound on the buffer size needed to contain a C
-   string representing the bignum NUM in base BASE.  This includes any
-   preceding '-' and the terminating null.  */
+   string representing the NUM in base BASE.  This includes any
+   preceding '-' and the terminating NUL.  */
+static ptrdiff_t
+mpz_bufsize (mpz_t const num, int base)
+{
+  return mpz_sizeinbase (num, base) + 2;
+}
 ptrdiff_t
 bignum_bufsize (Lisp_Object num, int base)
 {
-  return mpz_sizeinbase (XBIGNUM (num)->value, base) + 2;
+  return mpz_bufsize (XBIGNUM (num)->value, base);
+}
+
+/* Convert NUM to a nearest double, as opposed to mpz_get_d which
+   truncates toward zero.  */
+double
+mpz_get_d_rounded (mpz_t const num)
+{
+  ptrdiff_t size = mpz_bufsize (num, 10);
+
+  /* Use mpz_get_d as a shortcut for a bignum so small that rounding
+     errors cannot occur, which is possible if EMACS_INT (not counting
+     sign) has fewer bits than a double significand.  */
+  if (! ((FLT_RADIX == 2 && DBL_MANT_DIG <= FIXNUM_BITS - 1)
+	 || (FLT_RADIX == 16 && DBL_MANT_DIG * 4 <= FIXNUM_BITS - 1))
+      && size <= DBL_DIG + 2)
+    return mpz_get_d (num);
+
+  USE_SAFE_ALLOCA;
+  char *buf = SAFE_ALLOCA (size);
+  mpz_get_str (buf, 10, num);
+  double result = strtod (buf, NULL);
+  SAFE_FREE ();
+  return result;
 }
 
 /* Store into BUF (of size SIZE) the value of NUM as a base-BASE string.
@@ -289,14 +336,14 @@ bignum_to_string (Lisp_Object num, int base)
 
 /* Create a bignum by scanning NUM, with digits in BASE.
    NUM must consist of an optional '-', a nonempty sequence
-   of base-BASE digits, and a terminating null byte, and
+   of base-BASE digits, and a terminating NUL byte, and
    the represented number must not be in fixnum range.  */
 
 Lisp_Object
 make_bignum_str (char const *num, int base)
 {
-  struct Lisp_Bignum *b = ALLOCATE_PSEUDOVECTOR (struct Lisp_Bignum, value,
-						 PVEC_BIGNUM);
+  struct Lisp_Bignum *b = ALLOCATE_PLAIN_PSEUDOVECTOR (struct Lisp_Bignum,
+						       PVEC_BIGNUM);
   mpz_init (b->value);
   int check = mpz_set_str (b->value, num, base);
   eassert (check == 0);

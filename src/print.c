@@ -1,6 +1,6 @@
 /* Lisp object printing and output streams.
 
-Copyright (C) 1985-1986, 1988, 1993-1995, 1997-2018 Free Software
+Copyright (C) 1985-1986, 1988, 1993-1995, 1997-2019 Free Software
 Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -1361,6 +1361,19 @@ print_prune_string_charset (Lisp_Object string)
   return string;
 }
 
+#ifdef HAVE_MODULES
+/* Return a data pointer equal to FUNCPTR.  */
+
+static void const *
+data_from_funcptr (void (*funcptr) (void))
+{
+  /* The module code, and the POSIX API for dynamic linking, already
+     assume that function and data pointers are represented
+     interchangeably, so it's OK to assume that here too.  */
+  return (void const *) funcptr;
+}
+#endif
+
 static bool
 print_vectorlike (Lisp_Object obj, Lisp_Object printcharfun, bool escapeflag,
 		  char *buf)
@@ -1410,7 +1423,6 @@ print_vectorlike (Lisp_Object obj, Lisp_Object printcharfun, bool escapeflag,
       printchar ('>', printcharfun);
       break;
 
-#ifdef HAVE_MODULES
     case PVEC_USER_PTR:
       {
 	print_c_string ("#<user-ptr ", printcharfun);
@@ -1421,7 +1433,6 @@ print_vectorlike (Lisp_Object obj, Lisp_Object printcharfun, bool escapeflag,
 	printchar ('>', printcharfun);
       }
       break;
-#endif
 
     case PVEC_FINALIZER:
       print_c_string ("#<finalizer", printcharfun);
@@ -1789,24 +1800,21 @@ print_vectorlike (Lisp_Object obj, Lisp_Object printcharfun, bool escapeflag,
     case PVEC_MODULE_FUNCTION:
       {
 	print_c_string ("#<module function ", printcharfun);
-	void *ptr = XMODULE_FUNCTION (obj)->subr;
-	const char *file = NULL;
-	const char *symbol = NULL;
+        module_funcptr ptr = module_function_address (XMODULE_FUNCTION (obj));
+	char const *file;
+	char const *symbol;
 	dynlib_addr (ptr, &file, &symbol);
 
 	if (symbol == NULL)
 	  {
-	    print_c_string ("at ", printcharfun);
-	    enum { pointer_bufsize = sizeof ptr * 16 / CHAR_BIT + 2 + 1 };
-	    char buffer[pointer_bufsize];
-	    int needed = snprintf (buffer, sizeof buffer, "%p", ptr);
-	    const char p0x[] = "0x";
-	    eassert (needed <= sizeof buffer);
-	    /* ANSI C doesn't guarantee that %p produces a string that
-	       begins with a "0x".  */
-	    if (c_strncasecmp (buffer, p0x, sizeof (p0x) - 1) != 0)
-	      print_c_string (p0x, printcharfun);
-	    print_c_string (buffer, printcharfun);
+	    uintptr_t ui = (uintptr_t) data_from_funcptr (ptr);
+
+	    /* In theory this assignment could lose info on pre-C99
+	       hosts, but in practice it doesn't.  */
+	    uprintmax_t up = ui;
+
+	    int len = sprintf (buf, "at 0x%"pMx, up);
+	    strout (buf, len, len, printcharfun);
 	  }
 	else
 	  print_c_string (symbol, printcharfun);
@@ -1834,7 +1842,9 @@ print_object (Lisp_Object obj, Lisp_Object printcharfun, bool escapeflag)
 {
   char buf[max (sizeof "from..to..in " + 2 * INT_STRLEN_BOUND (EMACS_INT),
 		max (sizeof " . #" + INT_STRLEN_BOUND (printmax_t),
-		     40))];
+		     max ((sizeof "at 0x"
+			   + (sizeof (uprintmax_t) * CHAR_BIT + 4 - 1) / 4),
+			  40)))];
   current_thread->stack_top = buf;
   maybe_quit ();
 
@@ -1993,39 +2003,17 @@ print_object (Lisp_Object obj, Lisp_Object printcharfun, bool escapeflag)
 
     case Lisp_Symbol:
       {
-	bool confusing;
-	unsigned char *p = SDATA (SYMBOL_NAME (obj));
-	unsigned char *end = p + SBYTES (SYMBOL_NAME (obj));
-	int c;
-	ptrdiff_t i, i_byte;
-	ptrdiff_t size_byte;
-	Lisp_Object name;
+	Lisp_Object name = SYMBOL_NAME (obj);
+	ptrdiff_t size_byte = SBYTES (name);
 
-	name = SYMBOL_NAME (obj);
-
-	if (p != end && (*p == '-' || *p == '+')) p++;
-	if (p == end)
-	  confusing = 0;
-	/* If symbol name begins with a digit, and ends with a digit,
-	   and contains nothing but digits and `e', it could be treated
-	   as a number.  So set CONFUSING.
-
-	   Symbols that contain periods could also be taken as numbers,
-	   but periods are always escaped, so we don't have to worry
-	   about them here.  */
-	else if (*p >= '0' && *p <= '9'
-		 && end[-1] >= '0' && end[-1] <= '9')
-	  {
-	    while (p != end && ((*p >= '0' && *p <= '9')
-				/* Needed for \2e10.  */
-				|| *p == 'e' || *p == 'E'))
-	      p++;
-	    confusing = (end == p);
-	  }
-	else
-	  confusing = 0;
-
-	size_byte = SBYTES (name);
+	/* Set CONFUSING if NAME looks like a number, calling
+	   string_to_number for non-obvious cases.  */
+	char *p = SSDATA (name);
+	bool signedp = *p == '-' || *p == '+';
+	ptrdiff_t len;
+	bool confusing = ((c_isdigit (p[signedp]) || p[signedp] == '.')
+			  && !NILP (string_to_number (p, 10, &len))
+			  && len == size_byte);
 
 	if (! NILP (Vprint_gensym)
             && !SYMBOL_INTERNED_IN_INITIAL_OBARRAY_P (obj))
@@ -2036,10 +2024,12 @@ print_object (Lisp_Object obj, Lisp_Object printcharfun, bool escapeflag)
 	    break;
 	  }
 
-	for (i = 0, i_byte = 0; i_byte < size_byte;)
+	ptrdiff_t i = 0;
+	for (ptrdiff_t i_byte = 0; i_byte < size_byte; )
 	  {
 	    /* Here, we must convert each multi-byte form to the
 	       corresponding character code before handing it to PRINTCHAR.  */
+	    int c;
 	    FETCH_STRING_CHAR_ADVANCE (c, name, i, i_byte);
 	    maybe_quit ();
 
@@ -2049,6 +2039,7 @@ print_object (Lisp_Object obj, Lisp_Object printcharfun, bool escapeflag)
 		    || c == ';' || c == '#' || c == '(' || c == ')'
 		    || c == ',' || c == '.' || c == '`'
 		    || c == '[' || c == ']' || c == '?' || c <= 040
+		    || c == NO_BREAK_SPACE
                     || confusing
 		    || (i == 1 && confusable_symbol_character_p (c)))
 		  {

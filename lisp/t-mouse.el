@@ -1,10 +1,9 @@
 ;;; t-mouse.el --- mouse support within the text terminal
 
 ;; Author: Nick Roberts <nickrob@gnu.org>
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: mouse gpm linux
 
-;; Copyright (C) 1994-1995, 1998, 2006-2018 Free Software Foundation,
+;; Copyright (C) 1994-1995, 1998, 2006-2019 Free Software Foundation,
 ;; Inc.
 
 ;; This file is part of GNU Emacs.

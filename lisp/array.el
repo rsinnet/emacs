@@ -1,9 +1,8 @@
 ;;; array.el --- array editing commands for GNU Emacs
 
-;; Copyright (C) 1987, 2000-2018 Free Software Foundation, Inc.
+;; Copyright (C) 1987, 2000-2019 Free Software Foundation, Inc.
 
 ;; Author: David M. Brown
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: extensions
 
 ;; This file is part of GNU Emacs.

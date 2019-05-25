@@ -1,6 +1,6 @@
 ;;; ediff-ptch.el --- Ediff's  patch support
 
-;; Copyright (C) 1996-2018 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2019 Free Software Foundation, Inc.
 
 ;; Author: Michael Kifer <kifer@cs.stonybrook.edu>
 ;; Package: ediff
@@ -297,11 +297,24 @@ program."
 	      ;; file names. This is a heuristic intended to improve guessing
 	      (let ((default-directory (file-name-directory filename)))
 		(unless (or (file-name-absolute-p base-dir1)
-			    (file-name-absolute-p base-dir2)
-			    (not (file-exists-p base-dir1))
-			    (not (file-exists-p base-dir2)))
-		  (setq base-dir1 ""
-			base-dir2 "")))
+			    (file-name-absolute-p base-dir2))
+		  (if (and (file-exists-p base-dir1)
+			   (file-exists-p base-dir2))
+		      (setq base-dir1 ""
+			    base-dir2 "")
+		    ;; Strip possible source/destination prefixes
+		    ;; such as a/ and b/ from dir names.
+		    (save-match-data
+		      (let ((m1 (when (string-match "^[^/]+/" base-dir1)
+                                  (cons (substring base-dir1 0 (match-end 0))
+                                        (substring base-dir1 (match-end 0)))))
+			    (m2 (when (string-match "^[^/]+/" base-dir2)
+				  (cons (substring base-dir2 0 (match-end 0))
+                                        (substring base-dir2 (match-end 0))))))
+			(when (and (file-exists-p (cdr m1))
+				   (file-exists-p (cdr m2)))
+			  (setq base-dir1 (car m1)
+				base-dir2 (car m2))))))))
 	      (or (string= (car proposed-file-names) "/dev/null")
 		  (setcar proposed-file-names
 			  (ediff-file-name-sans-prefix
@@ -325,8 +338,8 @@ program."
     (mapc (lambda (session-info)
 	    (let ((proposed-file-names
 		   (ediff-get-session-objA-name session-info)))
-	      (if (and (string-match "^/null/" (car proposed-file-names))
-		       (string-match "^/null/" (cdr proposed-file-names)))
+	      (if (and (string-match-p "^/null/" (car proposed-file-names))
+		       (string-match-p "^/null/" (cdr proposed-file-names)))
 		  ;; couldn't intuit the file name to patch, so
 		  ;; something is amiss
 		  (progn
@@ -574,7 +587,7 @@ optional argument, then use it."
 	(ediff-patch-file-internal
 	 patch-buf
 	 (if (and ediff-patch-map
-		  (not (string-match
+		  (not (string-match-p
 			"^/dev/null"
 			;; this is the file to patch
 			(ediff-get-session-objA-name (car ediff-patch-map))))
@@ -677,11 +690,11 @@ optional argument, then use it."
 	 target-buf buf-to-patch file-name-magic-p
 	 patch-return-code ctl-buf backup-style aux-wind)
 
-    (if (string-match "V" ediff-patch-options)
+    (if (string-match-p "V" ediff-patch-options)
 	(error
 	 "Ediff doesn't take the -V option in `ediff-patch-options'--sorry"))
 
-    ;; Make a temp file, if source-filename has a magic file handler (or if
+    ;; Make a temp file, if source-filename has a magic file name handler (or if
     ;; it is handled via auto-mode-alist and similar magic).
     ;; Check if there is a buffer visiting source-filename and if they are in
     ;; sync; arrange for the deletion of temp file.
@@ -691,7 +704,7 @@ optional argument, then use it."
     ;; Check if source file name has triggered black magic, such as file name
     ;; handlers or auto mode alist, and make a note of it.
     ;; true-source-filename should be either the original name or a
-    ;; temporary file where we put the after-product of the file handler.
+    ;; temporary file where we put the after-product of the file name handler.
     (setq file-name-magic-p (not (equal (file-truename true-source-filename)
 					(file-truename source-filename))))
 
@@ -823,11 +836,11 @@ you can still examine the changes via M-x ediff-files"
     (setq startup-hooks
 	  ;; this sets various vars in the meta buffer inside
 	  ;; ediff-prepare-meta-buffer
-	  (cons `(lambda ()
-		   ;; tell what to do if the user clicks on a session record
-		   (setq ediff-session-action-function
-			 'ediff-patch-file-form-meta
-			 ediff-meta-patchbufer patch-buf) )
+	  (cons (lambda ()
+		  ;; tell what to do if the user clicks on a session record
+		  (setq ediff-session-action-function
+			'ediff-patch-file-form-meta
+			ediff-meta-patchbufer patch-buf) )
 		startup-hooks))
     (setq meta-buf (ediff-prepare-meta-buffer
 		    'ediff-filegroup-action

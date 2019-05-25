@@ -1,9 +1,8 @@
 ;;; abbrevlist.el --- list one abbrev table alphabetically ordered
 
-;; Copyright (C) 1986, 1992, 2001-2018 Free Software Foundation, Inc.
+;; Copyright (C) 1986, 1992, 2001-2019 Free Software Foundation, Inc.
 ;; Suggested by a previous version by Gildea.
 
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: abbrev
 ;; Package: emacs
 ;; Obsolete-since: 24.1

@@ -1,10 +1,9 @@
 ;;; comint.el --- general command interpreter in a window stuff -*- lexical-binding: t -*-
 
-;; Copyright (C) 1988, 1990, 1992-2018 Free Software Foundation, Inc.
+;; Copyright (C) 1988, 1990, 1992-2019 Free Software Foundation, Inc.
 
 ;; Author: Olin Shivers <shivers@cs.cmu.edu>
 ;;	Simon Marshall <simon@gnu.org>
-;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: processes
 ;; Package: emacs
 
@@ -350,13 +349,14 @@ This variable is buffer-local."
 ;; Ubuntu's sudo prompts like `[sudo] password for user:'
 ;; Some implementations of passwd use "Password (again)" as the 2nd prompt.
 ;; Something called "perforce" uses "Enter password:".
-;; See M-x comint-testsuite--test-comint-password-prompt-regexp.
+;; OpenVPN prints a prompt like: "Enter Auth Password:".
+;; See ert test `comint-test-password-regexp'.
 (defcustom comint-password-prompt-regexp
   (concat
    "\\(^ *\\|"
    (regexp-opt
     '("Enter" "enter" "Enter same" "enter same" "Enter the" "enter the"
-      "Old" "old" "New" "new" "'s" "login"
+      "Enter Auth" "enter auth" "Old" "old" "New" "new" "'s" "login"
       "Kerberos" "CVS" "UNIX" " SMB" "LDAP" "PEM" "SUDO"
       "[sudo]" "Repeat" "Bad" "Retype")
     t)
@@ -1618,8 +1618,8 @@ Go to the history element by the absolute history position HIST-POS."
 (defun comint-within-quotes (beg end)
   "Return t if the number of quotes between BEG and END is odd.
 Quotes are single and double."
-  (let ((countsq (comint-how-many-region "\\(^\\|[^\\\\]\\)'" beg end))
-	(countdq (comint-how-many-region "\\(^\\|[^\\\\]\\)\"" beg end)))
+  (let ((countsq (comint-how-many-region "\\(^\\|[^\\]\\)'" beg end))
+	(countdq (comint-how-many-region "\\(^\\|[^\\]\\)\"" beg end)))
     (or (= (mod countsq 2) 1) (= (mod countdq 2) 1))))
 
 (defun comint-how-many-region (regexp beg end)
@@ -2072,20 +2072,6 @@ Make backspaces delete the previous character."
 	    (goto-char (process-mark process))
 	    (set-marker comint-last-output-start (point))
 
-            ;; Try to skip repeated prompts, which can occur as a result of
-            ;; commands sent without inserting them in the buffer.
-            (let ((bol (save-excursion (forward-line 0) (point)))) ;No fields.
-              (when (and (not (bolp))
-                         (looking-back comint-prompt-regexp bol))
-                (let* ((prompt (buffer-substring bol (point)))
-                       (prompt-re (concat "\\`" (regexp-quote prompt))))
-                  (while (string-match prompt-re string)
-                    (setq string (substring string (match-end 0)))))))
-            (while (string-match (concat "\\(^" comint-prompt-regexp
-                                         "\\)\\1+")
-                                 string)
-              (setq string (replace-match "\\1" nil nil string)))
-
 	    ;; insert-before-markers is a bad thing. XXX
 	    ;; Luckily we don't have to use it any more, we use
 	    ;; window-point-insertion-type instead.
@@ -2536,13 +2522,16 @@ Useful if you accidentally suspend the top-level process."
 
 (defun comint-skip-input ()
   "Skip all pending input, from last stuff output by interpreter to point.
-This means mark it as if it had been sent as input, without sending it."
+This means mark it as if it had been sent as input, without
+sending it.  The command keys used to trigger the command that
+called this function are inserted into the buffer."
   (let ((comint-input-sender 'ignore)
 	(comint-input-filter-functions nil))
     (comint-send-input t t))
   (end-of-line)
   (let ((pos (point))
-	(marker (process-mark (get-buffer-process (current-buffer)))))
+	(marker (process-mark (get-buffer-process (current-buffer))))
+        (inhibit-read-only t))
     (insert "  " (key-description (this-command-keys)))
     (if (= marker pos)
 	(set-marker marker (point)))))
@@ -3089,7 +3078,7 @@ interpreter (e.g., the percent notation of cmd.exe on Windows)."
 	(let (env-var-name
 	      env-var-val)
 	  (save-match-data
-	    (while (string-match "%\\([^\\\\/]*\\)%" name)
+	    (while (string-match "%\\([^\\/]*\\)%" name)
 	      (setq env-var-name (match-string 1 name))
 	      (setq env-var-val (or (getenv env-var-name) ""))
 	      (setq name (replace-match env-var-val t t name))))))

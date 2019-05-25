@@ -1,5 +1,5 @@
 /* Font driver on macOS Core text.
-   Copyright (C) 2009-2018 Free Software Foundation, Inc.
+   Copyright (C) 2009-2019 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -35,6 +35,7 @@ Original author: YAMAMOTO Mitsuharu
 #include "nsterm.h"
 #include "macfont.h"
 #include "macuvs.h"
+#include "pdumper.h"
 
 #include <libkern/OSByteOrder.h>
 
@@ -1029,12 +1030,12 @@ macfont_handle_font_change_notification (CFNotificationCenterRef center,
 static void
 macfont_init_font_change_handler (void)
 {
-  static bool initialized = false;
+  static bool xinitialized = false;
 
-  if (initialized)
+  if (xinitialized)
     return;
 
-  initialized = true;
+  xinitialized = true;
   CFNotificationCenterAddObserver
     (CFNotificationCenterGetLocalCenter (), NULL,
      macfont_handle_font_change_notification,
@@ -1638,7 +1639,7 @@ static Lisp_Object macfont_open (struct frame *, Lisp_Object, int);
 static void macfont_close (struct font *);
 static int macfont_has_char (Lisp_Object, int);
 static unsigned macfont_encode_char (struct font *, int);
-static void macfont_text_extents (struct font *, unsigned int *, int,
+static void macfont_text_extents (struct font *, const unsigned int *, int,
                                   struct font_metrics *);
 static int macfont_draw (struct glyph_string *, int, int, int, int, bool);
 static Lisp_Object macfont_shape (Lisp_Object);
@@ -1646,7 +1647,7 @@ static int macfont_variation_glyphs (struct font *, int c,
                                      unsigned variations[256]);
 static void macfont_filter_properties (Lisp_Object, Lisp_Object);
 
-static struct font_driver const macfont_driver =
+static struct font_driver macfont_driver =
   {
   .type = LISPSYM_INITIALLY (Qmac_ct),
   .get_cache = macfont_get_cache,
@@ -1791,16 +1792,14 @@ macfont_get_open_type_spec (Lisp_Object otf_spec)
   spec->nfeatures[0] = spec->nfeatures[1] = 0;
   for (i = 0; i < 2 && ! NILP (otf_spec); i++, otf_spec = XCDR (otf_spec))
     {
-      Lisp_Object len;
-
       val = XCAR (otf_spec);
       if (NILP (val))
         continue;
-      len = Flength (val);
+      ptrdiff_t len = list_length (val);
       spec->features[i] =
-        (min (PTRDIFF_MAX, SIZE_MAX) / sizeof (int) < XFIXNUM (len)
+        (min (PTRDIFF_MAX, SIZE_MAX) / sizeof (int) < len
          ? 0
-         : malloc (XFIXNUM (len) * sizeof *spec->features[i]));
+         : malloc (len * sizeof *spec->features[i]));
       if (! spec->features[i])
         {
           if (i > 0 && spec->features[0])
@@ -2345,9 +2344,9 @@ macfont_list (struct frame *f, Lisp_Object spec)
                   != (spacing >= FONT_SPACING_MONO)))
             continue;
 
-          /* Don't use a color bitmap font until it is supported on
-	     free platforms.  */
-          if (sym_traits & kCTFontTraitColorGlyphs)
+          /* Don't use a color bitmap font unless its family is
+             explicitly specified.  */
+          if ((sym_traits & kCTFontTraitColorGlyphs) && NILP (family))
             continue;
 
           if (j > 0
@@ -2736,7 +2735,7 @@ macfont_encode_char (struct font *font, int c)
 }
 
 static void
-macfont_text_extents (struct font *font, unsigned int *code, int nglyphs,
+macfont_text_extents (struct font *font, const unsigned int *code, int nglyphs,
                       struct font_metrics *metrics)
 {
   int width, i;
@@ -2819,7 +2818,18 @@ macfont_draw (struct glyph_string *s, int from, int to, int x, int y,
       }
   }
 
-  context = [[NSGraphicsContext currentContext] graphicsPort];
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 101000
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101000
+  if ([[NSGraphicsContext currentContext] respondsToSelector:@selector(CGContext)])
+#endif
+    context = [[NSGraphicsContext currentContext] CGContext];
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101000
+  else
+#endif
+#endif
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 101000
+    context = [[NSGraphicsContext currentContext] graphicsPort];
+#endif
   CGContextSaveGState (context);
 
   if (!CGRectIsNull (background_rect))
@@ -2992,7 +3002,7 @@ macfont_shape (Lisp_Object lgstring)
 
       if (NILP (lglyph))
         {
-          lglyph = Fmake_vector (make_fixnum (LGLYPH_SIZE), Qnil);
+          lglyph = LGLYPH_NEW ();
           LGSTRING_SET_GLYPH (lgstring, i, lglyph);
         }
 
@@ -3044,9 +3054,7 @@ macfont_shape (Lisp_Object lgstring)
       wadjust = lround (gl->advance);
       if (xoff != 0 || yoff != 0 || wadjust != metrics.width)
         {
-          Lisp_Object vec;
-
-          vec = Fmake_vector (make_fixnum (3), Qnil);
+          Lisp_Object vec = make_uninit_vector (3);
           ASET (vec, 0, make_fixnum (xoff));
           ASET (vec, 1, make_fixnum (yoff));
           ASET (vec, 2, make_fixnum (wadjust));
@@ -4032,12 +4040,14 @@ mac_register_font_driver (struct frame *f)
 }
 
 
+
+static void syms_of_macfont_for_pdumper (void);
+
 void
 syms_of_macfont (void)
 {
   /* Core Text, for macOS.  */
   DEFSYM (Qmac_ct, "mac-ct");
-  register_font_driver (&macfont_driver, NULL);
 
   /* The font property key specifying the font design destination.  The
      value is an unsigned integer code: 0 for WYSIWYG, and 1 for Video
@@ -4052,4 +4062,18 @@ syms_of_macfont (void)
 
   macfont_family_cache = Qnil;
   staticpro (&macfont_family_cache);
+
+  pdumper_do_now_and_after_load (syms_of_macfont_for_pdumper);
+}
+
+static void
+syms_of_macfont_for_pdumper (void)
+{
+  if (dumped_with_pdumper_p ())
+    macfont_family_cache = Qnil;
+  else
+    eassert (NILP (macfont_family_cache));
+
+  macfont_driver.type = Qmac_ct;
+  register_font_driver (&macfont_driver, NULL);
 }
